@@ -2,6 +2,9 @@ import { z } from 'zod';
 export declare const PersonNodeSchema: z.ZodObject<{
     id: z.ZodString;
     displayName: z.ZodString;
+    gender: z.ZodNullable<z.ZodEnum<["MALE", "FEMALE"]>>;
+    surname: z.ZodNullable<z.ZodString>;
+    nik: z.ZodNullable<z.ZodString>;
     birthDate: z.ZodNullable<z.ZodString>;
     birthPlace: z.ZodNullable<z.ZodString>;
     deathDate: z.ZodNullable<z.ZodString>;
@@ -16,10 +19,15 @@ export declare const PersonNodeSchema: z.ZodObject<{
     createdAt: z.ZodString;
     updatedAt: z.ZodString;
 }, "strip", z.ZodTypeAny, {
-    id: string;
     displayName: string;
+    gender: "MALE" | "FEMALE" | null;
+    surname: string | null;
+    nik: string | null;
     birthDate: string | null;
     birthPlace: string | null;
+    id: string;
+    familyGroupId: string;
+    createdAt: string;
     deathDate: string | null;
     bio: string | null;
     avatarUrl: string | null;
@@ -28,14 +36,17 @@ export declare const PersonNodeSchema: z.ZodObject<{
     canvasX: number;
     canvasY: number;
     userId: string | null;
-    familyGroupId: string;
-    createdAt: string;
     updatedAt: string;
 }, {
-    id: string;
     displayName: string;
+    gender: "MALE" | "FEMALE" | null;
+    surname: string | null;
+    nik: string | null;
     birthDate: string | null;
     birthPlace: string | null;
+    id: string;
+    familyGroupId: string;
+    createdAt: string;
     deathDate: string | null;
     bio: string | null;
     avatarUrl: string | null;
@@ -44,8 +55,6 @@ export declare const PersonNodeSchema: z.ZodObject<{
     canvasX: number;
     canvasY: number;
     userId: string | null;
-    familyGroupId: string;
-    createdAt: string;
     updatedAt: string;
 }>;
 export type PersonNode = z.infer<typeof PersonNodeSchema>;

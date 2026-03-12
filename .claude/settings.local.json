@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(ls \"C:/Users/Lenovo/Documents/GitHub/genyra-familytree/apps/web/src/app/\\(app\\)/\" 2>&1)",
-      "Bash(ls \"C:/Users/Lenovo/Documents/GitHub/genyra-familytree/apps/web/src/app/\\(app\\)/join/\" 2>&1)"
+      "Bash(ls \"C:/Users/Lenovo/Documents/GitHub/genyra-familytree/apps/web/src/app/\\(app\\)/join/\" 2>&1)",
+      "Bash(pnpm --filter @genyra/shared-types build 2>&1)"
     ]
   }
 }

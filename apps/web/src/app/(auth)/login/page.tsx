@@ -19,7 +19,7 @@ export default function LoginPage() {
         <p className="text-center text-sm text-slate-500 mt-4">
           New family member?{' '}
           <a href="/register" className="text-brand-600 font-medium hover:underline">
-            Join with an invite code
+            Register here
           </a>
         </p>
       </div>

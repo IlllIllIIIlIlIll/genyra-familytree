@@ -9,6 +9,8 @@ import { apiClient } from '@/lib/api-client'
 import { useAuthStore } from '@/store/map-store'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { FONT, MAX_CHARS } from '@/lib/design-tokens'
+import { cn } from '@/lib/utils'
 
 export default function SetupPage() {
   const router = useRouter()
@@ -50,8 +52,8 @@ export default function SetupPage() {
             alt="Genyra"
             className="h-20 w-20 mx-auto mb-4"
           />
-          <h1 className="text-2xl font-semibold text-slate-800">Create your family tree</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className={cn(FONT.HEADING_LG, 'font-semibold text-slate-800')}>Create your family tree</h1>
+          <p className={cn(FONT.BODY, 'text-slate-500 mt-1')}>
             You need at least a father and mother to start. You are one of them.
           </p>
         </div>
@@ -62,13 +64,14 @@ export default function SetupPage() {
             id="familyName"
             label="Family Name"
             placeholder="e.g. Keluarga Santoso"
+            maxLength={MAX_CHARS.GROUP_NAME}
             {...register('familyName')}
             error={errors.familyName?.message ?? undefined}
           />
 
           {/* Are you the father or mother? */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-slate-700">
+            <label className={cn(FONT.LABEL, 'font-medium text-slate-700')}>
               You are the…
             </label>
             <div className="flex gap-4">
@@ -83,7 +86,7 @@ export default function SetupPage() {
                     {...register('userIsParent')}
                     className="accent-brand-500"
                   />
-                  <span className="text-sm text-slate-700">
+                  <span className={cn(FONT.BODY, 'text-slate-700')}>
                     {role === 'FATHER' ? '👨 Father' : '👩 Mother'}
                   </span>
                 </label>
@@ -99,6 +102,7 @@ export default function SetupPage() {
             id="otherParentName"
             label={userIsParent === 'FATHER' ? "Mother's Full Name" : "Father's Full Name"}
             placeholder={userIsParent === 'FATHER' ? 'Sri Mulyani' : 'Ahmad Santoso'}
+            maxLength={MAX_CHARS.DISPLAY_NAME}
             {...register('otherParentName')}
             error={errors.otherParentName?.message ?? undefined}
           />
@@ -124,7 +128,7 @@ export default function SetupPage() {
             {createMutation.isPending ? 'Creating family…' : 'Create my family tree'}
           </Button>
 
-          <p className="text-center text-sm text-slate-500">
+          <p className={cn(FONT.BODY, 'text-center text-slate-500')}>
             Joining an existing family instead?{' '}
             <a href="/join" className="text-brand-600 font-medium hover:underline">
               Use an invite code

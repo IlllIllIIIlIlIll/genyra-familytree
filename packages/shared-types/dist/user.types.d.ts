@@ -1,4 +1,6 @@
 import { z } from 'zod';
+export declare const GenderSchema: z.ZodEnum<["MALE", "FEMALE"]>;
+export type Gender = z.infer<typeof GenderSchema>;
 export declare const UserRoleSchema: z.ZodEnum<["FAMILY_MEMBER", "FAMILY_HEAD"]>;
 export type UserRole = z.infer<typeof UserRoleSchema>;
 export declare const MemberStatusSchema: z.ZodEnum<["PENDING_APPROVAL", "ACTIVE", "DEACTIVATED"]>;
@@ -7,17 +9,29 @@ export declare const RegisterSchema: z.ZodObject<{
     email: z.ZodString;
     password: z.ZodString;
     displayName: z.ZodString;
-    birthDate: z.ZodOptional<z.ZodString>;
+    gender: z.ZodEnum<["MALE", "FEMALE"]>;
+    surname: z.ZodString;
+    nik: z.ZodString;
+    birthDate: z.ZodString;
+    birthPlace: z.ZodString;
 }, "strip", z.ZodTypeAny, {
-    displayName: string;
     email: string;
     password: string;
-    birthDate?: string | undefined;
+    displayName: string;
+    gender: "MALE" | "FEMALE";
+    surname: string;
+    nik: string;
+    birthDate: string;
+    birthPlace: string;
 }, {
-    displayName: string;
     email: string;
     password: string;
-    birthDate?: string | undefined;
+    displayName: string;
+    gender: "MALE" | "FEMALE";
+    surname: string;
+    nik: string;
+    birthDate: string;
+    birthPlace: string;
 }>;
 export type RegisterDto = z.infer<typeof RegisterSchema>;
 export declare const JoinGroupSchema: z.ZodObject<{
@@ -42,24 +56,42 @@ export type LoginDto = z.infer<typeof LoginSchema>;
 export declare const UserSchema: z.ZodObject<{
     id: z.ZodString;
     email: z.ZodString;
+    displayName: z.ZodString;
+    gender: z.ZodEnum<["MALE", "FEMALE"]>;
+    surname: z.ZodString;
+    nik: z.ZodString;
+    birthDate: z.ZodString;
+    birthPlace: z.ZodString;
     role: z.ZodEnum<["FAMILY_MEMBER", "FAMILY_HEAD"]>;
     status: z.ZodEnum<["PENDING_APPROVAL", "ACTIVE", "DEACTIVATED"]>;
     familyGroupId: z.ZodNullable<z.ZodString>;
     createdAt: z.ZodString;
 }, "strip", z.ZodTypeAny, {
-    id: string;
-    familyGroupId: string | null;
-    createdAt: string;
     status: "PENDING_APPROVAL" | "ACTIVE" | "DEACTIVATED";
     email: string;
+    displayName: string;
+    gender: "MALE" | "FEMALE";
+    surname: string;
+    nik: string;
+    birthDate: string;
+    birthPlace: string;
+    id: string;
     role: "FAMILY_MEMBER" | "FAMILY_HEAD";
+    familyGroupId: string | null;
+    createdAt: string;
 }, {
-    id: string;
-    familyGroupId: string | null;
-    createdAt: string;
     status: "PENDING_APPROVAL" | "ACTIVE" | "DEACTIVATED";
     email: string;
+    displayName: string;
+    gender: "MALE" | "FEMALE";
+    surname: string;
+    nik: string;
+    birthDate: string;
+    birthPlace: string;
+    id: string;
     role: "FAMILY_MEMBER" | "FAMILY_HEAD";
+    familyGroupId: string | null;
+    createdAt: string;
 }>;
 export type User = z.infer<typeof UserSchema>;
 export declare const UpdateUserSchema: z.ZodObject<{
@@ -73,4 +105,21 @@ export declare const UpdateUserSchema: z.ZodObject<{
     password?: string | undefined;
 }>;
 export type UpdateUserDto = z.infer<typeof UpdateUserSchema>;
+export declare const CreateFamilyWithParentsSchema: z.ZodObject<{
+    familyName: z.ZodString;
+    userIsParent: z.ZodEnum<["FATHER", "MOTHER"]>;
+    otherParentName: z.ZodString;
+    otherParentSurname: z.ZodOptional<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    familyName: string;
+    userIsParent: "FATHER" | "MOTHER";
+    otherParentName: string;
+    otherParentSurname?: string | undefined;
+}, {
+    familyName: string;
+    userIsParent: "FATHER" | "MOTHER";
+    otherParentName: string;
+    otherParentSurname?: string | undefined;
+}>;
+export type CreateFamilyWithParentsDto = z.infer<typeof CreateFamilyWithParentsSchema>;
 //# sourceMappingURL=user.types.d.ts.map

@@ -8,6 +8,8 @@ import { RegisterSchema, type RegisterDto } from '@genyra/shared-types'
 import { apiClient } from '@/lib/api-client'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+import { FONT, MAX_CHARS } from '@/lib/design-tokens'
 
 export function RegisterForm() {
   const router = useRouter()
@@ -38,13 +40,14 @@ export function RegisterForm() {
         label="Full Name"
         placeholder="Budi Santoso"
         autoComplete="name"
+        maxLength={MAX_CHARS.DISPLAY_NAME}
         {...register('displayName')}
         error={errors.displayName?.message ?? undefined}
       />
 
       {/* Gender */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-slate-700">Gender</label>
+        <label className={cn(FONT.LABEL, 'font-medium text-slate-700')}>Gender</label>
         <div className="flex gap-3">
           {(['MALE', 'FEMALE'] as const).map((g) => (
             <label
@@ -57,7 +60,7 @@ export function RegisterForm() {
                 {...register('gender')}
                 className="accent-brand-500"
               />
-              <span className="text-sm text-slate-700">
+              <span className={cn(FONT.BODY, 'text-slate-700')}>
                 {g === 'MALE' ? 'Male' : 'Female'}
               </span>
             </label>
@@ -74,6 +77,7 @@ export function RegisterForm() {
         label="Surname / Family Name"
         placeholder="Santoso"
         autoComplete="family-name"
+        maxLength={MAX_CHARS.SURNAME}
         {...register('surname')}
         error={errors.surname?.message ?? undefined}
       />
@@ -103,6 +107,7 @@ export function RegisterForm() {
         id="birthPlace"
         label="Place of Birth"
         placeholder="Jakarta"
+        maxLength={MAX_CHARS.BIRTH_PLACE}
         {...register('birthPlace')}
         error={errors.birthPlace?.message ?? undefined}
       />

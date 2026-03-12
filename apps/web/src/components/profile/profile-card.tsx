@@ -2,6 +2,8 @@
 
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
+import { FONT, MAX_CHARS } from '@/lib/design-tokens'
+import { cn } from '@/lib/utils'
 import type { PersonNode } from '@genyra/shared-types'
 
 interface ProfileCardProps {
@@ -28,23 +30,27 @@ export function ProfileCard({ node, onClose }: ProfileCardProps) {
       <div className="flex items-center gap-4 mb-4">
         <Avatar src={node.avatarUrl} name={node.displayName} size="xl" />
         <div>
-          <h2 className="text-xl font-bold text-slate-800">{node.displayName}</h2>
+          <h2 className={cn(FONT.HEADING_MD, 'font-bold text-slate-800')}>
+            {node.displayName.length > MAX_CHARS.DISPLAY_NAME ? `${node.displayName.slice(0, MAX_CHARS.DISPLAY_NAME)}…` : node.displayName}
+          </h2>
           {(birthYear ?? deathYear) && (
-            <p className="text-sm text-slate-400 mt-0.5">
+            <p className={cn(FONT.BODY, 'text-slate-400 mt-0.5')}>
               {birthYear}
               {node.isDeceased && deathYear ? ` – ${deathYear}` : ''}
               {node.isDeceased && !deathYear ? ' (deceased)' : ''}
             </p>
           )}
           {node.birthPlace && (
-            <p className="text-sm text-slate-400">{node.birthPlace}</p>
+            <p className={cn(FONT.BODY, 'text-slate-400')}>{node.birthPlace}</p>
           )}
         </div>
       </div>
 
       {node.bio && (
-        <p className="text-sm text-slate-600 leading-relaxed mb-4 line-clamp-3">
-          {node.bio}
+        <p className={cn(FONT.BODY, 'text-slate-600 leading-relaxed mb-4')}>
+          {node.bio.length > MAX_CHARS.BIO_PREVIEW
+            ? `${node.bio.slice(0, MAX_CHARS.BIO_PREVIEW)}…`
+            : node.bio}
         </p>
       )}
 

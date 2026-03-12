@@ -37,18 +37,18 @@ export declare const InviteSchema: z.ZodObject<{
     familyGroupId: z.ZodString;
     createdAt: z.ZodString;
 }, "strip", z.ZodTypeAny, {
+    code: string;
+    status: "UNUSED" | "USED" | "EXPIRED";
     id: string;
     familyGroupId: string;
     createdAt: string;
-    code: string;
-    status: "UNUSED" | "USED" | "EXPIRED";
     expiresAt: string;
 }, {
+    code: string;
+    status: "UNUSED" | "USED" | "EXPIRED";
     id: string;
     familyGroupId: string;
     createdAt: string;
-    code: string;
-    status: "UNUSED" | "USED" | "EXPIRED";
     expiresAt: string;
 }>;
 export type Invite = z.infer<typeof InviteSchema>;
@@ -64,6 +64,9 @@ export declare const MapDataSchema: z.ZodObject<{
     nodes: z.ZodArray<z.ZodObject<{
         id: z.ZodString;
         displayName: z.ZodString;
+        gender: z.ZodNullable<z.ZodEnum<["MALE", "FEMALE"]>>;
+        surname: z.ZodNullable<z.ZodString>;
+        nik: z.ZodNullable<z.ZodString>;
         birthDate: z.ZodNullable<z.ZodString>;
         birthPlace: z.ZodNullable<z.ZodString>;
         deathDate: z.ZodNullable<z.ZodString>;
@@ -78,10 +81,15 @@ export declare const MapDataSchema: z.ZodObject<{
         createdAt: z.ZodString;
         updatedAt: z.ZodString;
     }, "strip", z.ZodTypeAny, {
-        id: string;
         displayName: string;
+        gender: "MALE" | "FEMALE" | null;
+        surname: string | null;
+        nik: string | null;
         birthDate: string | null;
         birthPlace: string | null;
+        id: string;
+        familyGroupId: string;
+        createdAt: string;
         deathDate: string | null;
         bio: string | null;
         avatarUrl: string | null;
@@ -90,14 +98,17 @@ export declare const MapDataSchema: z.ZodObject<{
         canvasX: number;
         canvasY: number;
         userId: string | null;
-        familyGroupId: string;
-        createdAt: string;
         updatedAt: string;
     }, {
-        id: string;
         displayName: string;
+        gender: "MALE" | "FEMALE" | null;
+        surname: string | null;
+        nik: string | null;
         birthDate: string | null;
         birthPlace: string | null;
+        id: string;
+        familyGroupId: string;
+        createdAt: string;
         deathDate: string | null;
         bio: string | null;
         avatarUrl: string | null;
@@ -106,8 +117,6 @@ export declare const MapDataSchema: z.ZodObject<{
         canvasX: number;
         canvasY: number;
         userId: string | null;
-        familyGroupId: string;
-        createdAt: string;
         updatedAt: string;
     }>, "many">;
     edges: z.ZodArray<z.ZodObject<{
@@ -140,10 +149,15 @@ export declare const MapDataSchema: z.ZodObject<{
     }>, "many">;
 }, "strip", z.ZodTypeAny, {
     nodes: {
-        id: string;
         displayName: string;
+        gender: "MALE" | "FEMALE" | null;
+        surname: string | null;
+        nik: string | null;
         birthDate: string | null;
         birthPlace: string | null;
+        id: string;
+        familyGroupId: string;
+        createdAt: string;
         deathDate: string | null;
         bio: string | null;
         avatarUrl: string | null;
@@ -152,8 +166,6 @@ export declare const MapDataSchema: z.ZodObject<{
         canvasX: number;
         canvasY: number;
         userId: string | null;
-        familyGroupId: string;
-        createdAt: string;
         updatedAt: string;
     }[];
     edges: {
@@ -168,10 +180,15 @@ export declare const MapDataSchema: z.ZodObject<{
     }[];
 }, {
     nodes: {
-        id: string;
         displayName: string;
+        gender: "MALE" | "FEMALE" | null;
+        surname: string | null;
+        nik: string | null;
         birthDate: string | null;
         birthPlace: string | null;
+        id: string;
+        familyGroupId: string;
+        createdAt: string;
         deathDate: string | null;
         bio: string | null;
         avatarUrl: string | null;
@@ -180,8 +197,6 @@ export declare const MapDataSchema: z.ZodObject<{
         canvasX: number;
         canvasY: number;
         userId: string | null;
-        familyGroupId: string;
-        createdAt: string;
         updatedAt: string;
     }[];
     edges: {

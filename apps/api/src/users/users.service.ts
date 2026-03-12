@@ -30,6 +30,12 @@ export class UsersService {
   private toUserDto(user: {
     id: string
     email: string
+    displayName: string
+    gender: 'MALE' | 'FEMALE'
+    surname: string
+    nik: string
+    birthDate: Date
+    birthPlace: string
     role: string
     status: string
     familyGroupId: string | null
@@ -38,6 +44,12 @@ export class UsersService {
     return {
       id: user.id,
       email: user.email,
+      displayName: user.displayName,
+      gender: user.gender,
+      surname: user.surname,
+      nik: user.nik,
+      birthDate: user.birthDate.toISOString(),
+      birthPlace: user.birthPlace,
       role: user.role as User['role'],
       status: user.status as User['status'],
       familyGroupId: user.familyGroupId,

@@ -2,9 +2,13 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UpdateCanvasPositionSchema = exports.UpdatePersonNodeSchema = exports.CreatePersonNodeSchema = exports.PersonNodeSchema = void 0;
 const zod_1 = require("zod");
+const user_types_1 = require("./user.types");
 exports.PersonNodeSchema = zod_1.z.object({
     id: zod_1.z.string(),
     displayName: zod_1.z.string().min(1).max(100),
+    gender: user_types_1.GenderSchema.nullable(),
+    surname: zod_1.z.string().nullable(),
+    nik: zod_1.z.string().nullable(),
     birthDate: zod_1.z.string().datetime().nullable(),
     birthPlace: zod_1.z.string().max(200).nullable(),
     deathDate: zod_1.z.string().datetime().nullable(),

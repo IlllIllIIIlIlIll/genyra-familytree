@@ -97,6 +97,9 @@ export class PersonNodesService {
   private toDto(node: {
     id: string
     displayName: string
+    gender: 'MALE' | 'FEMALE' | null
+    surname: string | null
+    nik: string | null
     birthDate: Date | null
     birthPlace: string | null
     deathDate: Date | null
@@ -114,6 +117,9 @@ export class PersonNodesService {
     return {
       id: node.id,
       displayName: node.displayName,
+      gender: node.gender ?? null,
+      surname: node.surname ?? null,
+      nik: node.nik ?? null,
       birthDate: node.birthDate?.toISOString() ?? null,
       birthPlace: node.birthPlace,
       deathDate: node.deathDate?.toISOString() ?? null,

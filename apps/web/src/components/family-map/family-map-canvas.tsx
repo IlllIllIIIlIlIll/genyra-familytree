@@ -16,18 +16,35 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef } from 'react'
 import { apiClient } from '@/lib/api-client'
 import { useMapUIStore } from '@/store/map-store'
+import { CANVAS, MINIMAP, COLOR } from '@/lib/design-tokens'
 import { PersonNodeComponent } from './person-node'
+import { JunctionNodeComponent } from './junction-node'
 import { RelationshipEdgeComponent } from './relationship-edge'
+import { JunctionEdgeComponent } from './junction-edge'
 import { ProfileCard } from '@/components/profile/profile-card'
+import { computeFamilyLayout } from './family-layout'
 import type { PersonNode } from '@genyra/shared-types'
 
-const nodeTypes = { personNode: PersonNodeComponent }
-const edgeTypes = { relationshipEdge: RelationshipEdgeComponent }
+const nodeTypes = {
+  personNode:   PersonNodeComponent,
+  junctionNode: JunctionNodeComponent,
+}
+
+const edgeTypes = {
+  relationshipEdge: RelationshipEdgeComponent,
+  junctionEdge:     JunctionEdgeComponent,
+}
 
 interface PersonNodeData extends Record<string, unknown> {
   node: PersonNode
   isCurrentUser: boolean
 }
+
+interface JunctionData extends Record<string, unknown> {
+  isJunction: true
+}
+
+type FlowNodeData = PersonNodeData | JunctionData
 
 interface FamilyMapCanvasProps {
   familyGroupId: string
@@ -42,7 +59,7 @@ export function FamilyMapCanvas({ familyGroupId }: FamilyMapCanvasProps) {
     queryFn: () => apiClient.getMapData(familyGroupId),
   })
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node<PersonNodeData>>([])
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node<FlowNodeData>>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
 
   const positionSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -52,54 +69,73 @@ export function FamilyMapCanvas({ familyGroupId }: FamilyMapCanvasProps) {
       apiClient.updateCanvasPosition(id, { canvasX: x, canvasY: y }),
   })
 
-  // Transform API data into React Flow format
   useEffect(() => {
     if (!mapData) return
 
-    const flowNodes: Node<PersonNodeData>[] = mapData.nodes.map((n) => ({
-      id: n.id,
-      type: 'personNode',
-      position: { x: n.canvasX, y: n.canvasY },
-      data: { node: n, isCurrentUser: false },
+    const { positions, junctions, edges: edgeMetas } = computeFamilyLayout(mapData)
+
+    const personNodes: Node<FlowNodeData>[] = mapData.nodes.map((n) => {
+      const pos = positions.get(n.id) ?? { x: n.canvasX, y: n.canvasY }
+      return {
+        id:       n.id,
+        type:     'personNode',
+        position: pos,
+        data:     { node: n, isCurrentUser: false } satisfies PersonNodeData,
+        draggable: true,
+      }
+    })
+
+    const junctionNodes: Node<FlowNodeData>[] = junctions.map((j) => ({
+      id:         j.id,
+      type:       'junctionNode',
+      position:   { x: j.x, y: j.y },
+      data:       { isJunction: true } satisfies JunctionData,
+      draggable:  false,
+      selectable: false,
+      focusable:  false,
     }))
 
-    const flowEdges: Edge[] = mapData.edges.map((e) => ({
-      id: e.id,
-      source: e.sourceId,
-      target: e.targetId,
-      type: 'relationshipEdge',
-      data: { relationshipType: e.relationshipType },
+    const flowEdges: Edge[] = edgeMetas.map((em) => ({
+      id:           em.id,
+      source:       em.source,
+      target:       em.target,
+      sourceHandle: em.sourceHandle,
+      targetHandle: em.targetHandle,
+      type:         em.edgeType,
+      data:         { relationshipType: em.relationshipType },
     }))
 
-    setNodes(flowNodes)
+    setNodes([...personNodes, ...junctionNodes])
     setEdges(flowEdges)
   }, [mapData, setNodes, setEdges])
 
-  // Debounced canvas position save on node drag
+  // Debounced position save — only for person nodes, never junctions
   const handleNodesChange = useCallback(
-    (changes: NodeChange<Node<PersonNodeData>>[]) => {
+    (changes: NodeChange<Node<FlowNodeData>>[]) => {
       onNodesChange(changes)
 
-      const positionChange = changes.find(
-        (c): c is NodeChange<Node<PersonNodeData>> & { type: 'position'; dragging: false } =>
-          c.type === 'position' && !('dragging' in c && c.dragging),
-      )
-
-      if (positionChange && 'position' in positionChange && positionChange.position) {
-        const { id } = positionChange
-        const { x, y } = positionChange.position
-
-        if (positionSaveTimer.current) clearTimeout(positionSaveTimer.current)
-        positionSaveTimer.current = setTimeout(() => {
-          updatePositionMutation.mutate({ id, x, y })
-        }, 500)
+      for (const c of changes) {
+        if (
+          c.type === 'position' &&
+          'dragging' in c && !c.dragging &&
+          'position' in c && c.position != null &&
+          !c.id.startsWith('junc_')
+        ) {
+          const pos = c.position
+          if (positionSaveTimer.current) clearTimeout(positionSaveTimer.current)
+          positionSaveTimer.current = setTimeout(() => {
+            updatePositionMutation.mutate({ id: c.id, x: pos.x, y: pos.y })
+          }, 500)
+          break
+        }
       }
     },
     [onNodesChange, updatePositionMutation],
   )
 
   const handleNodeClick = useCallback(
-    (_event: React.MouseEvent, node: Node<PersonNodeData>) => {
+    (_event: React.MouseEvent, node: Node<FlowNodeData>) => {
+      if (node.type !== 'personNode') return
       openProfilePanel(node.id)
     },
     [openProfilePanel],
@@ -129,21 +165,20 @@ export function FamilyMapCanvas({ familyGroupId }: FamilyMapCanvasProps) {
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
-        fitViewOptions={{ padding: 0.3 }}
-        minZoom={0.1}
-        maxZoom={2}
+        fitViewOptions={{ padding: CANVAS.FIT_PADDING }}
+        minZoom={CANVAS.MIN_ZOOM}
+        maxZoom={CANVAS.MAX_ZOOM}
         proOptions={{ hideAttribution: true }}
         className="bg-brand-50"
       >
-        <Background color="#f0d8df" gap={24} size={1} />
-        <Controls
-          className="!shadow-sm !border-brand-100"
-          showInteractive={false}
-        />
+        <Background color={COLOR.MAP_GRID_DOT} gap={24} size={1} />
+        <Controls className="!shadow-sm !border-brand-100" showInteractive={false} />
         <MiniMap
-          nodeColor="#e8829a"
-          maskColor="rgba(248, 240, 242, 0.7)"
+          nodeColor={COLOR.MINIMAP_NODE}
+          maskColor={COLOR.MINIMAP_MASK}
           className="!border-brand-100 !rounded-xl overflow-hidden"
+          width={MINIMAP.WIDTH}
+          height={MINIMAP.HEIGHT}
         />
       </ReactFlow>
 
