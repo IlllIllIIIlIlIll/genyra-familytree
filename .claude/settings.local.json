@@ -3,7 +3,14 @@
     "allow": [
       "Bash(ls \"C:/Users/Lenovo/Documents/GitHub/genyra-familytree/apps/web/src/app/\\(app\\)/\" 2>&1)",
       "Bash(ls \"C:/Users/Lenovo/Documents/GitHub/genyra-familytree/apps/web/src/app/\\(app\\)/join/\" 2>&1)",
-      "Bash(pnpm --filter @genyra/shared-types build 2>&1)"
+      "Bash(pnpm --filter @genyra/shared-types build 2>&1)",
+      "Bash(cd \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\genyra-familytree\" && pnpm db:seed 2>&1)",
+      "Bash(cd \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\genyra-familytree\\\\apps\\\\api\" && npx prisma db seed 2>&1)",
+      "Bash(find \"C:/Users/Lenovo/Documents/GitHub/genyra-familytree/apps/web/src/components\" -name \"*.tsx\" 2>/dev/null | head -30)",
+      "Bash(cd \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\genyra-familytree\" && pnpm add html-to-image --filter @genyra/web 2>&1)",
+      "Bash(ls \"C:/Users/Lenovo/Documents/GitHub/genyra-familytree/apps/web/src/app/\\(app\\)/profile/[person-id]/\" 2>/dev/null && echo \"exists\" || echo \"empty/not found\")",
+      "Bash(cd \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\genyra-familytree\\\\apps\\\\web\" && npx tsc --noEmit 2>&1 | head -40)",
+      "Bash(cd \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\genyra-familytree\" && pnpm type-check 2>&1 | tail -30)"
     ]
   }
 }

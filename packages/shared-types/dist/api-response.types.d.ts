@@ -61,6 +61,7 @@ export declare const ValidateInviteSchema: z.ZodObject<{
 }>;
 export type ValidateInviteDto = z.infer<typeof ValidateInviteSchema>;
 export declare const MapDataSchema: z.ZodObject<{
+    familyName: z.ZodString;
     nodes: z.ZodArray<z.ZodObject<{
         id: z.ZodString;
         displayName: z.ZodString;
@@ -148,6 +149,7 @@ export declare const MapDataSchema: z.ZodObject<{
         notes: string | null;
     }>, "many">;
 }, "strip", z.ZodTypeAny, {
+    familyName: string;
     nodes: {
         displayName: string;
         gender: "MALE" | "FEMALE" | null;
@@ -179,6 +181,7 @@ export declare const MapDataSchema: z.ZodObject<{
         notes: string | null;
     }[];
 }, {
+    familyName: string;
     nodes: {
         displayName: string;
         gender: "MALE" | "FEMALE" | null;

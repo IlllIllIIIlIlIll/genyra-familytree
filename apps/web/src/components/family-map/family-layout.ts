@@ -1,24 +1,34 @@
 /**
  * Family tree auto-layout engine.
  *
- * Generation rules:
- *   - Nodes with no parents = generation 0.
- *   - Children = parent generation + 1.
- *   - Spouses always share the same generation (pulled to match their partner).
+ * Generation rules (two-pass):
+ *   Pass 1 — BFS via parent-child edges only.
+ *             Nodes with no parents = generation 0.
+ *             Children = parent generation + 1.
+ *             Spouses are NOT pulled here — this prevents married-in roots
+ *             from prematurely claiming generation 0 and colliding with their
+ *             in-law's children.
+ *   Pass 2 — Spouse generation resolution (multi-round until stable):
+ *             If one spouse has a gen and the other doesn't → copy it.
+ *             If both have different gens (cross-generation couple) →
+ *             both are placed at the DEEPER (higher number) generation.
+ *   Pass 3 — Any node still unassigned (totally disconnected) → gen 0.
  *
  * Junction nodes:
  *   - For every set of children sharing the same parent(s), one invisible
  *     junction node is placed between the parents and the children.
  *   - All sibling edges therefore emerge from the same point (the junction).
  *   - Junction X  = average centre-X of the parent(s).
- *   - Junction Y  = parent_Y + NODE_H + JUNCTION_OFFSET.
+ *   - Junction Y  = max(parent Y values) + NODE_H + JUNCTION_OFFSET.
+ *     Using the deepest parent ensures cross-generation parents route the
+ *     junction below the LOWER parent, not the shallower one.
  *
  * Edge routing:
- *   - SPOUSE  : left ↔ right handles, straight horizontal line.
- *   - SIBLING : left ↔ right handles, smoothstep horizontal.
+ *   - SPOUSE  : left ↔ right handles, bezier arc.
+ *   - SIBLING : left ↔ right handles, smoothstep.
  *   - PARENT_CHILD: split into two junction edges —
- *       parent  (bottom) → junction (top)   straight diagonal
- *       junction(bottom) → child   (top)    straight vertical
+ *       parent  (bottom) → junction (top)   smoothstep
+ *       junction(bottom) → child   (top)    smoothstep
  */
 
 import type { MapData } from '@genyra/shared-types'
@@ -80,46 +90,68 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
     }
   }
 
-  // ── Generation assignment (BFS from roots) ─────────────────────────────────
-  // We treat spouse pairs as a single "BFS unit" to ensure they always share
-  // a generation even if one is a child of another level.
+  // ── Generation assignment ──────────────────────────────────────────────────
+  //
+  // Problem with a simple BFS: married-in roots (Siti, Reza, Ayu, etc.) have
+  // no parents, so they start at gen 0. Their children get gen 1 in the BFS.
+  // Later, when we process the real grandparent (Ahmad gen 1), his children
+  // have already been visited, so their gen is never corrected to gen 2.
+  //
+  // Solution: combined iterative propagation.
+  //   - Seed: all nodes with no parents start at gen 0.
+  //   - Each round: propagate children (child ≥ parent+1) AND resolve spouses
+  //     (both at max of the pair). Only INCREASE gens, never decrease.
+  //   - Repeat until stable. Guaranteed to converge because gens only increase
+  //     and are bounded by the depth of the tree.
   const generation = new Map<string, number>()
-  const roots = nodes.filter((n) => (parentsOf.get(n.id)?.size ?? 0) === 0)
-  const queue: Array<{ id: string; gen: number }> = roots.map((r) => ({ id: r.id, gen: 0 }))
 
-  const processed = new Set<string>()
+  // Seed all roots at gen 0
+  for (const n of nodes) {
+    if ((parentsOf.get(n.id)?.size ?? 0) === 0) {
+      generation.set(n.id, 0)
+    }
+  }
 
-  while (queue.length > 0) {
-    const item = queue.shift()!
-    if (processed.has(item.id)) continue
-    processed.add(item.id)
+  // Iterative child propagation + spouse resolution until no more changes
+  let dirty = true
+  let safetyIter = 0
+  while (dirty && safetyIter++ < nodes.length * 4) {
+    dirty = false
 
-    // Assign current gen
-    generation.set(item.id, item.gen)
-
-    // Spouse MUST share the same gen
-    const partnerId = spousePairs.get(item.id)
-    if (partnerId) {
-      generation.set(partnerId, item.gen)
-      processed.add(partnerId)
+    // Child propagation: every child must be at least parent_gen + 1
+    for (const [parentId, childSet] of childrenOf) {
+      const parentGen = generation.get(parentId)
+      if (parentGen === undefined) continue
+      for (const childId of childSet) {
+        const needed  = parentGen + 1
+        const current = generation.get(childId)
+        if (current === undefined || current < needed) {
+          generation.set(childId, needed)
+          dirty = true
+        }
+      }
     }
 
-    // Process children of both partners
-    const unitIds = partnerId ? [item.id, partnerId] : [item.id]
-    for (const uid of unitIds) {
-      for (const childId of childrenOf.get(uid) ?? []) {
-        if (!processed.has(childId)) {
-          queue.push({ id: childId, gen: item.gen + 1 })
-        }
+    // Spouse resolution: both spouses must share the same (max) generation
+    for (const e of edges) {
+      if (e.relationshipType !== 'SPOUSE') continue
+      const gA = generation.get(e.sourceId)
+      const gB = generation.get(e.targetId)
+      if (gA !== undefined && gB === undefined) {
+        generation.set(e.targetId, gA); dirty = true
+      } else if (gB !== undefined && gA === undefined) {
+        generation.set(e.sourceId, gB); dirty = true
+      } else if (gA !== undefined && gB !== undefined && gA !== gB) {
+        const resolved = Math.max(gA, gB)
+        if (gA !== resolved) { generation.set(e.sourceId, resolved); dirty = true }
+        if (gB !== resolved) { generation.set(e.targetId, resolved); dirty = true }
       }
     }
   }
 
-  // Disconnected nodes → generation 0 (Level 0)
+  // Any nodes still unassigned (completely isolated) → generation 0
   for (const n of nodes) {
-    if (!generation.has(n.id)) {
-      generation.set(n.id, 0)
-    }
+    if (!generation.has(n.id)) generation.set(n.id, 0)
   }
 
   // ── Group by generation ────────────────────────────────────────────────────
@@ -138,7 +170,7 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
       if (visited.has(id)) continue
       visited.add(id)
       const partner = spousePairs.get(id)
-      if (partner && !visited.has(partner)) {
+      if (partner && ids.includes(partner) && !visited.has(partner)) {
         visited.add(partner)
         const node  = nodeById.get(id)
         const pNode = nodeById.get(partner)
@@ -186,7 +218,6 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
   }
 
   // ── Build junction nodes ───────────────────────────────────────────────────
-  // Group children by their parent set so siblings share one junction.
   const parentGroups = new Map<string, { parentIds: string[]; childIds: string[] }>()
 
   for (const [childId, pSet] of parentsOf) {
@@ -210,26 +241,118 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
         return sum + pos.x + NODE_W / 2
       }, 0) / group.parentIds.length
 
-    const parentY = positions.get(group.parentIds[0]!)?.y ?? 0
-    const juncId  = `junc_${key}`
+    // Use the DEEPEST parent Y so that cross-generation parents route the
+    // junction below the lower parent's row (not the upper one).
+    const maxParentY = Math.max(
+      ...group.parentIds.map((pid) => positions.get(pid)?.y ?? 0),
+    )
 
+    const juncId = `junc_${key}`
     junctions.push({
       id:  juncId,
       x:   avgCentreX - JUNCTION_SIZE / 2,
-      y:   parentY + NODE_H + JUNCTION_OFFSET,
+      y:   maxParentY + NODE_H + JUNCTION_OFFSET,
     })
     juncIdByKey.set(key, juncId)
+  }
+
+  // ── Reposition children under their parent junction ───────────────────────
+  //
+  // The global generation layout above places all same-gen nodes in one flat
+  // row. This pass redistributes each parent group's children to be centered
+  // under the group's junction, pulling in each child's spouse so couples
+  // remain adjacent. Groups are processed left-to-right so that when two
+  // groups share a Y level, later groups don't overlap earlier ones.
+  {
+    const sortedGroups = [...parentGroups.entries()]
+      .map(([key, group]) => ({
+        key,
+        group,
+        junc: junctions.find((j) => j.id === `junc_${key}`)!,
+      }))
+      .filter((g) => g.junc != null && g.group.childIds.length > 0)
+      .sort((a, b) => a.junc.x - b.junc.x)
+
+    // rightEdge per Y level — prevents overlap between sibling-groups on the same row
+    const rightEdgeByY = new Map<number, number>()
+    const alreadyPlaced = new Set<string>()
+
+    for (const { group, junc } of sortedGroups) {
+      const children = [...group.childIds].filter((id) => !alreadyPlaced.has(id))
+      if (children.length === 0) continue
+
+      // Determine the Y for this child group (all children share the same gen)
+      const childY = Math.max(...children.map((id) => positions.get(id)?.y ?? 0))
+
+      // Sort children left-to-right to maintain visual order
+      children.sort((a, b) => (positions.get(a)?.x ?? 0) - (positions.get(b)?.x ?? 0))
+
+      // Build couple-aware units: pair each child with their external spouse
+      const seenInUnit = new Set<string>()
+      const units: Array<{ ids: string[]; w: number }> = []
+
+      for (const cid of children) {
+        if (seenInUnit.has(cid)) continue
+        seenInUnit.add(cid)
+
+        const spouse = spousePairs.get(cid)
+        if (spouse && !seenInUnit.has(spouse) && !children.includes(spouse)) {
+          // External spouse — place as a couple unit (male left, female right)
+          seenInUnit.add(spouse)
+          const spouseNode = nodeById.get(spouse)
+          const childNode  = nodeById.get(cid)
+          const leftId  = spouseNode?.gender === 'MALE' && childNode?.gender !== 'MALE' ? spouse : cid
+          const rightId = leftId === cid ? spouse : cid
+          units.push({ ids: [leftId, rightId], w: NODE_W * 2 + COUPLE_GAP })
+        } else if (spouse && children.includes(spouse) && !seenInUnit.has(spouse)) {
+          // Sibling couple (incest edge case)
+          seenInUnit.add(spouse)
+          units.push({ ids: [cid, spouse], w: NODE_W * 2 + COUPLE_GAP })
+        } else {
+          units.push({ ids: [cid], w: NODE_W })
+        }
+      }
+
+      const totalW =
+        units.reduce((s, u) => s + u.w, 0) +
+        UNIT_GAP * Math.max(units.length - 1, 0)
+
+      const juncCenterX = junc.x + JUNCTION_SIZE / 2
+      let startX = juncCenterX - totalW / 2
+
+      // Enforce right-edge constraint so groups don't overlap on the same row
+      const prevRight = rightEdgeByY.get(childY) ?? -Infinity
+      if (startX < prevRight + UNIT_GAP) startX = prevRight + UNIT_GAP
+
+      for (const unit of units) {
+        const [a, b] = unit.ids
+        if (b !== undefined) {
+          positions.set(a!, { x: startX, y: childY })
+          positions.set(b,  { x: startX + NODE_W + COUPLE_GAP, y: childY })
+        } else {
+          positions.set(a!, { x: startX, y: childY })
+        }
+        unit.ids.forEach((id) => alreadyPlaced.add(id))
+        startX += unit.w + UNIT_GAP
+      }
+
+      rightEdgeByY.set(childY, startX - UNIT_GAP)
+
+      // Recentre the junction over its repositioned children
+      const childXs = group.childIds.map((id) => (positions.get(id)?.x ?? 0) + NODE_W / 2)
+      const newJuncCX = (Math.min(...childXs) + Math.max(...childXs)) / 2
+      junc.x = newJuncCX - JUNCTION_SIZE / 2
+    }
   }
 
   // ── Build edges ────────────────────────────────────────────────────────────
   const flowEdges: FlowEdgeMeta[] = []
 
   for (const e of edges) {
-    // PARENT_CHILD is replaced by junction edges below — skip here
     if (e.relationshipType === 'PARENT_CHILD') continue
 
-    const srcPos   = positions.get(e.sourceId)
-    const tgtPos   = positions.get(e.targetId)
+    const srcPos    = positions.get(e.sourceId)
+    const tgtPos    = positions.get(e.targetId)
     const srcIsLeft = (srcPos?.x ?? 0) < (tgtPos?.x ?? 0)
 
     flowEdges.push({
@@ -243,12 +366,11 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
     })
   }
 
-  // Add junction routing edges (replace all PARENT_CHILD edges)
+  // Junction routing edges (replace all PARENT_CHILD edges)
   for (const [key, group] of parentGroups) {
     const juncId = juncIdByKey.get(key)
     if (!juncId) continue
 
-    // Each parent → junction
     for (const pid of group.parentIds) {
       flowEdges.push({
         id:               `${juncId}_p_${pid}`,
@@ -261,7 +383,6 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
       })
     }
 
-    // Junction → each child
     for (const cid of group.childIds) {
       flowEdges.push({
         id:               `${juncId}_c_${cid}`,

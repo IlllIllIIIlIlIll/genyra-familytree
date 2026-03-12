@@ -4,35 +4,34 @@ import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { FONT, MAX_CHARS } from '@/lib/design-tokens'
 import { cn } from '@/lib/utils'
+import { useRouter } from 'next/navigation'
 import type { PersonNode } from '@genyra/shared-types'
 
 interface ProfileCardProps {
   node: PersonNode
-  onClose?: () => void
 }
 
-export function ProfileCard({ node, onClose }: ProfileCardProps) {
+export function ProfileCard({ node }: ProfileCardProps) {
+  const router = useRouter()
   const birthYear = node.birthDate ? new Date(node.birthDate).getFullYear() : null
   const deathYear = node.deathDate ? new Date(node.deathDate).getFullYear() : null
 
   return (
-    <div className="bg-white rounded-t-3xl border-t border-brand-100 shadow-xl p-6 pb-safe animate-in slide-in-from-bottom-4 duration-200">
-      {onClose && (
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 text-slate-400"
-          aria-label="Close"
-        >
-          ✕
-        </button>
-      )}
+    <div className="bg-white rounded-t-3xl border-t border-stone-200 shadow-xl p-6 pb-safe animate-in slide-in-from-bottom-4 duration-200">
+      {/* Drag handle / tap-to-close hint */}
+      <div className="w-10 h-1 bg-stone-200 rounded-full mx-auto mb-4" />
 
       <div className="flex items-center gap-4 mb-4">
         <Avatar src={node.avatarUrl} name={node.displayName} size="xl" />
-        <div>
-          <h2 className={cn(FONT.HEADING_MD, 'font-bold text-slate-800')}>
-            {node.displayName.length > MAX_CHARS.DISPLAY_NAME ? `${node.displayName.slice(0, MAX_CHARS.DISPLAY_NAME)}…` : node.displayName}
+        <div className="flex-1 min-w-0">
+          <h2 className={cn(FONT.HEADING_MD, 'font-bold text-slate-800 truncate')}>
+            {node.displayName.length > MAX_CHARS.DISPLAY_NAME
+              ? `${node.displayName.slice(0, MAX_CHARS.DISPLAY_NAME)}…`
+              : node.displayName}
           </h2>
+          {node.surname && (
+            <p className={cn(FONT.LABEL, 'text-slate-500 font-medium')}>{node.surname}</p>
+          )}
           {(birthYear ?? deathYear) && (
             <p className={cn(FONT.BODY, 'text-slate-400 mt-0.5')}>
               {birthYear}
@@ -54,14 +53,28 @@ export function ProfileCard({ node, onClose }: ProfileCardProps) {
         </p>
       )}
 
-      <div className="flex gap-3">
-        <Button size="sm" variant="secondary" className="flex-1">
+      <div className="flex gap-3 mb-4">
+        <Button
+          size="sm"
+          variant="secondary"
+          className="flex-1"
+          onClick={() => router.push(`/profile/${node.id}`)}
+        >
           View Full Profile
         </Button>
-        <Button size="sm" variant="ghost">
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => router.push(`/profile/${node.id}/edit`)}
+        >
           Edit
         </Button>
       </div>
+
+      {/* Coming-soon features teaser */}
+      <p className={cn(FONT.NODE_BADGE, 'text-center text-slate-300 tracking-wide uppercase')}>
+        Photos · Timeline · Family tree export — more to add soon
+      </p>
     </div>
   )
 }

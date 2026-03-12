@@ -43,18 +43,22 @@ interface MapUIState {
   selectedNodeId: string | null
   isProfilePanelOpen: boolean
   isEditMode: boolean
+  isCleanView: boolean
   setSelectedNode: (id: string | null) => void
   openProfilePanel: (id: string) => void
   closeProfilePanel: () => void
   setEditMode: (value: boolean) => void
+  toggleCleanView: () => void
 }
 
 export const useMapUIStore = create<MapUIState>()((set) => ({
   selectedNodeId: null,
   isProfilePanelOpen: false,
   isEditMode: false,
+  isCleanView: false,
   setSelectedNode: (id) => set({ selectedNodeId: id }),
   openProfilePanel: (id) => set({ selectedNodeId: id, isProfilePanelOpen: true }),
   closeProfilePanel: () => set({ isProfilePanelOpen: false, selectedNodeId: null }),
   setEditMode: (value) => set({ isEditMode: value }),
+  toggleCleanView: () => set((s) => ({ isCleanView: !s.isCleanView })),
 }))

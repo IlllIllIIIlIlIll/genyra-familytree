@@ -3,7 +3,7 @@
 import { memo, type FC, type ReactElement } from 'react'
 import {
   BaseEdge,
-  getStraightPath,
+  getBezierPath,
   getSmoothStepPath,
   type EdgeProps,
 } from '@xyflow/react'
@@ -29,8 +29,12 @@ export const RelationshipEdgeComponent: FC<EdgeProps & { data: RelationshipData 
     let edgePath: string
 
     if (type === 'SPOUSE') {
-      // Straight horizontal line between spouses (they are side by side)
-      ;[edgePath] = getStraightPath({ sourceX, sourceY, targetX, targetY })
+      // Gentle bezier arc between spouses (side by side, left↔right handles)
+      ;[edgePath] = getBezierPath({
+        sourceX, sourceY, sourcePosition,
+        targetX, targetY, targetPosition,
+        curvature: 0.25,
+      })
     } else {
       // Orthogonal step path for PARENT_CHILD / SIBLING
       ;[edgePath] = getSmoothStepPath({

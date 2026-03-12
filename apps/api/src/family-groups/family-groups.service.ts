@@ -174,7 +174,8 @@ export class FamilyGroupsService {
       throw new ForbiddenException('Not a member of this family group')
     }
 
-    const [personNodes, relationships] = await Promise.all([
+    const [group, personNodes, relationships] = await Promise.all([
+      this.prisma.familyGroup.findUnique({ where: { id: groupId } }),
       this.prisma.personNode.findMany({
         where: { familyGroupId: groupId },
         include: { photos: { orderBy: { sortOrder: 'asc' }, take: 1 } },
@@ -218,7 +219,7 @@ export class FamilyGroupsService {
       createdAt: r.createdAt.toISOString(),
     }))
 
-    return { nodes, edges }
+    return { familyName: group?.name ?? 'Family', nodes, edges }
   }
 
   private toFamilyGroupDto(group: {

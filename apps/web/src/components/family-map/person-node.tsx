@@ -14,6 +14,32 @@ interface PersonNodeData {
 
 const handleCls = '!opacity-0 !w-2 !h-2 !border-0 !bg-transparent'
 
+// Returns background + border classes.
+// Deceased → always grey (gender shown via icon instead of color).
+// Alive Male   → sky blue.
+// Alive Female → rose pink.
+// Unknown      → neutral white.
+function cardColorCls(gender: string | null, isDeceased: boolean): string {
+  if (isDeceased) return 'bg-slate-100 border-slate-300'
+  if (gender === 'MALE')   return 'bg-sky-50 border-sky-200'
+  if (gender === 'FEMALE') return 'bg-rose-50 border-rose-200'
+  return 'bg-white border-slate-200'
+}
+
+function hoverCls(gender: string | null, isDeceased: boolean): string {
+  if (isDeceased)          return 'hover:border-slate-400 hover:shadow-md'
+  if (gender === 'MALE')   return 'hover:border-sky-400 hover:shadow-md'
+  if (gender === 'FEMALE') return 'hover:border-rose-400 hover:shadow-md'
+  return 'hover:border-brand-300 hover:shadow-md'
+}
+
+function selectedCls(gender: string | null, isDeceased: boolean): string {
+  if (isDeceased)          return 'border-slate-400 shadow-slate-200 shadow-md scale-105'
+  if (gender === 'MALE')   return 'border-sky-400 shadow-sky-200 shadow-md scale-105'
+  if (gender === 'FEMALE') return 'border-rose-400 shadow-rose-200 shadow-md scale-105'
+  return 'border-brand-400 shadow-brand-200 shadow-md scale-105'
+}
+
 export const PersonNodeComponent = memo(function PersonNodeComponent({
   data,
   selected,
@@ -38,36 +64,38 @@ export const PersonNodeComponent = memo(function PersonNodeComponent({
         style={{ width: CANVAS.NODE_W }}
         className={cn(
           'flex flex-col items-center gap-2 p-3 cursor-pointer select-none',
-          'bg-white rounded-2xl border shadow-sm transition-all',
+          'rounded-2xl border shadow-sm transition-all',
+          cardColorCls(node.gender, node.isDeceased),
+          node.isDeceased ? 'opacity-75' : '',
           selected
-            ? 'border-brand-400 shadow-brand-200 shadow-md scale-105'
-            : 'border-slate-100 hover:border-brand-300 hover:shadow-md',
+            ? selectedCls(node.gender, node.isDeceased)
+            : hoverCls(node.gender, node.isDeceased),
           isCurrentUser && 'ring-2 ring-brand-400 ring-offset-1',
-          node.isDeceased && 'opacity-70 grayscale',
         )}
       >
         <Avatar
           src={node.avatarUrl}
           name={node.displayName}
           size="md"
-          className={cn(node.isDeceased && 'grayscale')}
         />
         <div className="text-center w-full overflow-hidden">
-          <p className={cn(FONT.NODE_NAME, 'font-semibold text-slate-800 leading-tight truncate')}>
-            {node.displayName.length > MAX_CHARS.NODE_NAME
-              ? `${node.displayName.slice(0, MAX_CHARS.NODE_NAME)}…`
-              : node.displayName}
-          </p>
-          {node.gender && (
-            <p className={cn(FONT.NODE_BADGE, 'text-slate-400 mt-0.5')}>
-              {node.gender === 'MALE' ? '♂' : '♀'}
-              {node.surname && (
-                <span className="ml-1 opacity-80">
-                  {node.surname.length > MAX_CHARS.NODE_SURNAME
-                    ? `${node.surname.slice(0, MAX_CHARS.NODE_SURNAME)}…`
-                    : node.surname}
-                </span>
-              )}
+          <div className="flex items-center justify-center gap-0.5">
+            {node.isDeceased && node.gender && (
+              <span className={cn(FONT.NODE_BADGE, 'text-slate-400 leading-none')}>
+                {node.gender === 'MALE' ? '♂' : '♀'}
+              </span>
+            )}
+            <p className={cn(FONT.NODE_NAME, 'font-semibold text-slate-800 leading-tight truncate')}>
+              {node.displayName.length > MAX_CHARS.NODE_NAME
+                ? `${node.displayName.slice(0, MAX_CHARS.NODE_NAME)}…`
+                : node.displayName}
+            </p>
+          </div>
+          {node.surname && (
+            <p className={cn(FONT.NODE_BADGE, 'text-slate-500 mt-0.5 font-medium')}>
+              {node.surname.length > MAX_CHARS.NODE_SURNAME
+                ? `${node.surname.slice(0, MAX_CHARS.NODE_SURNAME)}…`
+                : node.surname}
             </p>
           )}
           {node.birthDate && (

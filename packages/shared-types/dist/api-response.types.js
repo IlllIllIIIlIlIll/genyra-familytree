@@ -27,6 +27,7 @@ exports.ValidateInviteSchema = zod_1.z.object({
     code: zod_1.z.string().min(1),
 });
 exports.MapDataSchema = zod_1.z.object({
+    familyName: zod_1.z.string(),
     nodes: zod_1.z.array(person_node_types_1.PersonNodeSchema),
     edges: zod_1.z.array(relationship_types_1.RelationshipEdgeSchema),
 });

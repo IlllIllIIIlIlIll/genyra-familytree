@@ -70,7 +70,7 @@ export const COLOR = {
   EDGE_PARENT_CHILD:  '#e8829a',
   EDGE_SIBLING:       '#d4a0b0',
   EDGE_JUNCTION:      '#e8829a',
-  MAP_GRID_DOT:       '#f0d8df',
+  MAP_GRID_DOT:       '#c4a882',  // warm sand — matches linen canvas bg
   MINIMAP_NODE:       '#e8829a',
   MINIMAP_MASK:       'rgba(248, 240, 242, 0.7)',
 } as const

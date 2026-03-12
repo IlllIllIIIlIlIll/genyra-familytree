@@ -35,6 +35,7 @@ export const ValidateInviteSchema = z.object({
 export type ValidateInviteDto = z.infer<typeof ValidateInviteSchema>
 
 export const MapDataSchema = z.object({
+  familyName: z.string(),
   nodes: z.array(PersonNodeSchema),
   edges: z.array(RelationshipEdgeSchema),
 })
