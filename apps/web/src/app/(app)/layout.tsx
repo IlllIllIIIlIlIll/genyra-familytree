@@ -8,18 +8,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const accessToken = useAuthStore((s) => s.accessToken)
   const familyGroupId = useAuthStore((s) => s.familyGroupId)
-  const isJoinPage = typeof window !== 'undefined' && window.location.pathname === '/join'
+
+  const pathname = typeof window !== 'undefined' ? window.location.pathname : ''
+  const isSetupPage = pathname === '/setup'
+  const isJoinPage = pathname === '/join'
+  const isOnboarding = isSetupPage || isJoinPage
 
   useEffect(() => {
     if (!accessToken) {
       router.push('/login')
-    } else if (!familyGroupId && !isJoinPage) {
-      router.push('/join')
+    } else if (!familyGroupId && !isOnboarding) {
+      router.push('/setup')
     }
-  }, [accessToken, familyGroupId, isJoinPage, router])
+  }, [accessToken, familyGroupId, isOnboarding, router])
 
   if (!accessToken) return null
-  if (!familyGroupId && !isJoinPage) return null
+  if (!familyGroupId && !isOnboarding) return null
 
   return (
     <div className="h-screen flex flex-col">

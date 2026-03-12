@@ -1,6 +1,13 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import type { FamilyGroup, MapData, CreateFamilyGroupDto, PersonNode, RelationshipEdge } from '@genyra/shared-types'
+import type {
+  FamilyGroup,
+  MapData,
+  CreateFamilyGroupDto,
+  CreateFamilyWithParentsDto,
+  PersonNode,
+  RelationshipEdge,
+} from '@genyra/shared-types'
 
 @Injectable()
 export class FamilyGroupsService {
@@ -17,10 +24,93 @@ export class FamilyGroupsService {
       },
     })
 
-    // Promote the creator to Family Head
     await this.prisma.user.update({
       where: { id: creatorId },
       data: { role: 'FAMILY_HEAD', status: 'ACTIVE', familyGroupId: group.id },
+    })
+
+    return this.toFamilyGroupDto(group)
+  }
+
+  /**
+   * Creates the user's family with at least two parents.
+   * The user themselves is one of the parents (FATHER or MOTHER).
+   * The other parent is a placeholder PersonNode.
+   * Relationships: father --PARENT_CHILD--> user's child node (future),
+   * and father --SPOUSE--> mother.
+   * For now we create the 3 nodes (user, father placeholder, mother placeholder)
+   * and link them accordingly.
+   */
+  async createWithParents(
+    dto: CreateFamilyWithParentsDto,
+    creatorId: string,
+  ): Promise<FamilyGroup> {
+    const creator = await this.prisma.user.findUnique({ where: { id: creatorId } })
+    if (!creator) throw new NotFoundException('User not found')
+    if (creator.familyGroupId) throw new BadRequestException('User already has a family group')
+
+    const group = await this.prisma.familyGroup.create({
+      data: {
+        name: dto.familyName,
+        members: { connect: { id: creatorId } },
+      },
+    })
+
+    const groupId = group.id
+
+    // Determine which parent the user is
+    const userIsFather = dto.userIsParent === 'FATHER'
+
+    // Create the user's own PersonNode
+    const userNode = await this.prisma.personNode.create({
+      data: {
+        displayName: creator.displayName,
+        gender: creator.gender,
+        surname: creator.surname,
+        nik: creator.nik,
+        birthDate: creator.birthDate,
+        birthPlace: creator.birthPlace,
+        isPlaceholder: false,
+        userId: creatorId,
+        familyGroupId: groupId,
+        canvasX: userIsFather ? 0 : 300,
+        canvasY: 0,
+      },
+    })
+
+    // Create the other parent as a placeholder node
+    const otherParentNode = await this.prisma.personNode.create({
+      data: {
+        displayName: dto.otherParentName,
+        gender: userIsFather ? 'FEMALE' : 'MALE',
+        surname: dto.otherParentSurname ?? null,
+        isPlaceholder: true,
+        familyGroupId: groupId,
+        canvasX: userIsFather ? 300 : 0,
+        canvasY: 0,
+      },
+    })
+
+    // Link the two parents as SPOUSE
+    const fatherNode = userIsFather ? userNode : otherParentNode
+    const motherNode = userIsFather ? otherParentNode : userNode
+
+    await this.prisma.relationshipEdge.create({
+      data: {
+        relationshipType: 'SPOUSE',
+        sourceId: fatherNode.id,
+        targetId: motherNode.id,
+      },
+    })
+
+    // Promote user to Family Head
+    await this.prisma.user.update({
+      where: { id: creatorId },
+      data: {
+        role: 'FAMILY_HEAD',
+        status: 'ACTIVE',
+        familyGroupId: groupId,
+      },
     })
 
     return this.toFamilyGroupDto(group)
@@ -54,12 +144,14 @@ export class FamilyGroupsService {
         },
       })
 
-      // The previous registration logic captured a displayName which we don't have here. 
-      // We will create the PersonNode using the email prefix or let them edit later.
-      const defaultName = user.email.split('@')[0] || 'Unknown'
       await tx.personNode.create({
         data: {
-          displayName: defaultName,
+          displayName: user.displayName,
+          gender: user.gender,
+          surname: user.surname,
+          nik: user.nik,
+          birthDate: user.birthDate,
+          birthPlace: user.birthPlace,
           userId: user.id,
           familyGroupId: invite.familyGroupId,
         },
@@ -97,6 +189,9 @@ export class FamilyGroupsService {
     const nodes: PersonNode[] = personNodes.map((n) => ({
       id: n.id,
       displayName: n.displayName,
+      gender: n.gender ?? null,
+      surname: n.surname ?? null,
+      nik: n.nik ?? null,
       birthDate: n.birthDate?.toISOString() ?? null,
       birthPlace: n.birthPlace ?? null,
       deathDate: n.deathDate?.toISOString() ?? null,

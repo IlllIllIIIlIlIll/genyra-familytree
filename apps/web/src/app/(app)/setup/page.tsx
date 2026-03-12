@@ -1,0 +1,137 @@
+'use client'
+
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useRouter } from 'next/navigation'
+import { useMutation } from '@tanstack/react-query'
+import { CreateFamilyWithParentsSchema, type CreateFamilyWithParentsDto } from '@genyra/shared-types'
+import { apiClient } from '@/lib/api-client'
+import { useAuthStore } from '@/store/map-store'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+
+export default function SetupPage() {
+  const router = useRouter()
+  const { setFamilyGroupId } = useAuthStore()
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+    setError,
+  } = useForm<CreateFamilyWithParentsDto>({
+    resolver: zodResolver(CreateFamilyWithParentsSchema),
+    defaultValues: { userIsParent: 'FATHER' },
+  })
+
+  const userIsParent = watch('userIsParent')
+
+  const createMutation = useMutation({
+    mutationFn: apiClient.createFamilyWithParents,
+    onSuccess: (group) => {
+      setFamilyGroupId(group.id)
+      router.push('/map')
+    },
+    onError: (error: { response?: { data?: { message?: string } } }) => {
+      const message = error.response?.data?.message ?? 'Failed to create family'
+      setError('root', { message })
+    },
+  })
+
+  const onSubmit = handleSubmit((data) => createMutation.mutate(data))
+
+  return (
+    <main className="min-h-screen flex items-center justify-center p-4 bg-brand-50">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <img
+            src="/genyra_logo.png"
+            alt="Genyra"
+            className="h-20 w-20 mx-auto mb-4"
+          />
+          <h1 className="text-2xl font-semibold text-slate-800">Create your family tree</h1>
+          <p className="text-sm text-slate-500 mt-1">
+            You need at least a father and mother to start. You are one of them.
+          </p>
+        </div>
+
+        <form onSubmit={(e) => void onSubmit(e)} className="space-y-5">
+          {/* Family name */}
+          <Input
+            id="familyName"
+            label="Family Name"
+            placeholder="e.g. Keluarga Santoso"
+            {...register('familyName')}
+            error={errors.familyName?.message ?? undefined}
+          />
+
+          {/* Are you the father or mother? */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-slate-700">
+              You are the…
+            </label>
+            <div className="flex gap-4">
+              {(['FATHER', 'MOTHER'] as const).map((role) => (
+                <label
+                  key={role}
+                  className="flex items-center gap-2 cursor-pointer select-none"
+                >
+                  <input
+                    type="radio"
+                    value={role}
+                    {...register('userIsParent')}
+                    className="accent-brand-500"
+                  />
+                  <span className="text-sm text-slate-700">
+                    {role === 'FATHER' ? '👨 Father' : '👩 Mother'}
+                  </span>
+                </label>
+              ))}
+            </div>
+            {errors.userIsParent && (
+              <p className="text-xs text-red-500">{errors.userIsParent.message}</p>
+            )}
+          </div>
+
+          {/* Other parent */}
+          <Input
+            id="otherParentName"
+            label={userIsParent === 'FATHER' ? "Mother's Full Name" : "Father's Full Name"}
+            placeholder={userIsParent === 'FATHER' ? 'Sri Mulyani' : 'Ahmad Santoso'}
+            {...register('otherParentName')}
+            error={errors.otherParentName?.message ?? undefined}
+          />
+
+          <Input
+            id="otherParentSurname"
+            label={`${userIsParent === 'FATHER' ? "Mother's" : "Father's"} Surname (optional)`}
+            placeholder="Mulyani"
+            {...register('otherParentSurname')}
+            error={errors.otherParentSurname?.message ?? undefined}
+          />
+
+          {errors.root && (
+            <p className="text-sm text-red-500 text-center">{errors.root.message}</p>
+          )}
+
+          <Button
+            type="submit"
+            size="lg"
+            className="w-full"
+            disabled={createMutation.isPending}
+          >
+            {createMutation.isPending ? 'Creating family…' : 'Create my family tree'}
+          </Button>
+
+          <p className="text-center text-sm text-slate-500">
+            Joining an existing family instead?{' '}
+            <a href="/join" className="text-brand-600 font-medium hover:underline">
+              Use an invite code
+            </a>
+          </p>
+        </form>
+      </div>
+    </main>
+  )
+}

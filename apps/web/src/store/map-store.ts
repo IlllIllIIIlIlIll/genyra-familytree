@@ -9,6 +9,7 @@ interface AuthState {
   role: string | null
   setTokens: (tokens: { accessToken: string; refreshToken: string }) => void
   setUser: (user: { userId: string; familyGroupId: string | null; role: string }) => void
+  setFamilyGroupId: (id: string) => void
   clear: () => void
 }
 
@@ -24,6 +25,7 @@ export const useAuthStore = create<AuthState>()(
         set({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }),
       setUser: (user) =>
         set({ userId: user.userId, familyGroupId: user.familyGroupId, role: user.role }),
+      setFamilyGroupId: (id) => set({ familyGroupId: id }),
       clear: () =>
         set({
           accessToken: null,

@@ -12,6 +12,7 @@ import type {
   CreateRelationshipDto,
   FamilyGroup,
   CreateFamilyGroupDto,
+  CreateFamilyWithParentsDto,
   JoinGroupDto,
   MapData,
   Invite,
@@ -103,6 +104,11 @@ export const apiClient = {
   // Family Groups
   createFamilyGroup: async (dto: CreateFamilyGroupDto): Promise<FamilyGroup> => {
     const { data } = await http.post<FamilyGroup>('/family-groups', dto)
+    return data
+  },
+
+  createFamilyWithParents: async (dto: CreateFamilyWithParentsDto): Promise<FamilyGroup> => {
+    const { data } = await http.post<FamilyGroup>('/family-groups/create-family', dto)
     return data
   },
 

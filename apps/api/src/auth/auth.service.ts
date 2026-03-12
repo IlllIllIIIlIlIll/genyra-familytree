@@ -17,11 +17,18 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto): Promise<{ message: string }> {
-    const existingUser = await this.prisma.user.findUnique({
+    const existingEmail = await this.prisma.user.findUnique({
       where: { email: dto.email },
     })
-    if (existingUser) {
+    if (existingEmail) {
       throw new BadRequestException('Email already registered')
+    }
+
+    const existingNik = await this.prisma.user.findUnique({
+      where: { nik: dto.nik },
+    })
+    if (existingNik) {
+      throw new BadRequestException('NIK already registered')
     }
 
     const passwordHash = await argon2.hash(dto.password)
@@ -30,7 +37,13 @@ export class AuthService {
       data: {
         email: dto.email,
         passwordHash,
-        status: 'ACTIVE', // Activate automatically to let them log in and join a group
+        displayName: dto.displayName,
+        gender: dto.gender,
+        surname: dto.surname,
+        nik: dto.nik,
+        birthDate: new Date(dto.birthDate),
+        birthPlace: dto.birthPlace,
+        status: 'ACTIVE',
       },
     })
 
@@ -47,9 +60,6 @@ export class AuthService {
     const passwordValid = await argon2.verify(user.passwordHash, dto.password)
     if (!passwordValid) throw new UnauthorizedException('Invalid credentials')
 
-    if (user.status === 'PENDING_APPROVAL') {
-      throw new ForbiddenException('Account pending approval by Family Head')
-    }
     if (user.status === 'DEACTIVATED') {
       throw new ForbiddenException('Account has been deactivated')
     }

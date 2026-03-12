@@ -1,8 +1,12 @@
 import { z } from 'zod'
+import { GenderSchema } from './user.types'
 
 export const PersonNodeSchema = z.object({
   id: z.string(),
   displayName: z.string().min(1).max(100),
+  gender: GenderSchema.nullable(),
+  surname: z.string().nullable(),
+  nik: z.string().nullable(),
   birthDate: z.string().datetime().nullable(),
   birthPlace: z.string().max(200).nullable(),
   deathDate: z.string().datetime().nullable(),
@@ -18,6 +22,7 @@ export const PersonNodeSchema = z.object({
   updatedAt: z.string().datetime(),
 })
 export type PersonNode = z.infer<typeof PersonNodeSchema>
+
 
 export const CreatePersonNodeSchema = z.object({
   displayName: z.string().min(1).max(100),

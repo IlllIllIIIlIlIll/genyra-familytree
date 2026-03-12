@@ -3,8 +3,13 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { FamilyGroupsService } from './family-groups.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator'
-import { CreateFamilyGroupSchema } from '@genyra/shared-types'
-import type { FamilyGroup, MapData, CreateFamilyGroupDto } from '@genyra/shared-types'
+import { CreateFamilyGroupSchema, CreateFamilyWithParentsSchema } from '@genyra/shared-types'
+import type {
+  FamilyGroup,
+  MapData,
+  CreateFamilyGroupDto,
+  CreateFamilyWithParentsDto,
+} from '@genyra/shared-types'
 
 @ApiTags('family-groups')
 @ApiBearerAuth()
@@ -23,13 +28,22 @@ export class FamilyGroupsController {
     return this.familyGroupsService.create(dto, user.sub)
   }
 
+  @Post('create-family')
+  @ApiOperation({ summary: 'Create family with parents — called after first login, makes caller a Family Head' })
+  async createWithParents(
+    @Body() body: unknown,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<FamilyGroup> {
+    const dto = CreateFamilyWithParentsSchema.parse(body) satisfies CreateFamilyWithParentsDto
+    return this.familyGroupsService.createWithParents(dto, user.sub)
+  }
+
   @Post('join')
   @ApiOperation({ summary: 'Join an existing family group via invite code' })
   async join(
     @Body() body: unknown,
     @CurrentUser() user: JwtPayload,
   ): Promise<{ message: string }> {
-    // We import JoinGroupSchema from shared-types on top
     const { JoinGroupSchema } = await import('@genyra/shared-types')
     const dto = JoinGroupSchema.parse(body)
     return this.familyGroupsService.join(dto, user.sub)

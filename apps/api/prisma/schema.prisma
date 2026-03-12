@@ -11,6 +11,11 @@ datasource db {
 // Enums
 // ─────────────────────────────────────────────
 
+enum Gender {
+  MALE
+  FEMALE
+}
+
 enum UserRole {
   FAMILY_MEMBER
   FAMILY_HEAD
@@ -43,8 +48,16 @@ model User {
   email        String       @unique
   passwordHash String
   role         UserRole     @default(FAMILY_MEMBER)
-  status       MemberStatus @default(PENDING_APPROVAL)
+  status       MemberStatus @default(ACTIVE)
   refreshToken String?
+
+  // Identity fields
+  displayName String
+  gender      Gender
+  surname     String
+  nik         String   @unique
+  birthDate   DateTime
+  birthPlace  String
 
   familyGroupId String?
   familyGroup   FamilyGroup? @relation("GroupMembers", fields: [familyGroupId], references: [id])
@@ -71,15 +84,18 @@ model FamilyGroup {
 }
 
 model PersonNode {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   displayName   String
+  gender        Gender?
+  surname       String?
+  nik           String?   @unique
   birthDate     DateTime?
   birthPlace    String?
   deathDate     DateTime?
   bio           String?
   avatarUrl     String?
-  isDeceased    Boolean  @default(false)
-  isPlaceholder Boolean  @default(false)
+  isDeceased    Boolean   @default(false)
+  isPlaceholder Boolean   @default(false)
 
   canvasX Float @default(0)
   canvasY Float @default(0)

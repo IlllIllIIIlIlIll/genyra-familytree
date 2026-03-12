@@ -12,7 +12,8 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "db:seed": "ts-node --transpile-only prisma/seed.ts"
   },
   "dependencies": {
     "@fastify/static": "^9.0.0",
@@ -45,6 +46,9 @@
     "ts-jest": "^29.2.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.4"
+  },
+  "prisma": {
+    "seed": "ts-node --transpile-only prisma/seed.ts"
   },
   "jest": {
     "moduleFileExtensions": [
