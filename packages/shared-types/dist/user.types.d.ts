@@ -6,7 +6,6 @@ export type UserRole = z.infer<typeof UserRoleSchema>;
 export declare const MemberStatusSchema: z.ZodEnum<["PENDING_APPROVAL", "ACTIVE", "DEACTIVATED"]>;
 export type MemberStatus = z.infer<typeof MemberStatusSchema>;
 export declare const RegisterSchema: z.ZodObject<{
-    email: z.ZodString;
     password: z.ZodString;
     displayName: z.ZodString;
     gender: z.ZodEnum<["MALE", "FEMALE"]>;
@@ -15,7 +14,6 @@ export declare const RegisterSchema: z.ZodObject<{
     birthDate: z.ZodString;
     birthPlace: z.ZodString;
 }, "strip", z.ZodTypeAny, {
-    email: string;
     password: string;
     displayName: string;
     gender: "MALE" | "FEMALE";
@@ -24,7 +22,6 @@ export declare const RegisterSchema: z.ZodObject<{
     birthDate: string;
     birthPlace: string;
 }, {
-    email: string;
     password: string;
     displayName: string;
     gender: "MALE" | "FEMALE";
@@ -43,32 +40,30 @@ export declare const JoinGroupSchema: z.ZodObject<{
 }>;
 export type JoinGroupDto = z.infer<typeof JoinGroupSchema>;
 export declare const LoginSchema: z.ZodObject<{
-    email: z.ZodString;
+    nik: z.ZodString;
     password: z.ZodString;
 }, "strip", z.ZodTypeAny, {
-    email: string;
     password: string;
+    nik: string;
 }, {
-    email: string;
     password: string;
+    nik: string;
 }>;
 export type LoginDto = z.infer<typeof LoginSchema>;
 export declare const UserSchema: z.ZodObject<{
     id: z.ZodString;
-    email: z.ZodString;
-    displayName: z.ZodString;
-    gender: z.ZodEnum<["MALE", "FEMALE"]>;
-    surname: z.ZodString;
     nik: z.ZodString;
-    birthDate: z.ZodString;
-    birthPlace: z.ZodString;
     role: z.ZodEnum<["FAMILY_MEMBER", "FAMILY_HEAD"]>;
     status: z.ZodEnum<["PENDING_APPROVAL", "ACTIVE", "DEACTIVATED"]>;
     familyGroupId: z.ZodNullable<z.ZodString>;
     createdAt: z.ZodString;
+    displayName: z.ZodString;
+    gender: z.ZodEnum<["MALE", "FEMALE"]>;
+    surname: z.ZodString;
+    birthDate: z.ZodString;
+    birthPlace: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     status: "PENDING_APPROVAL" | "ACTIVE" | "DEACTIVATED";
-    email: string;
     displayName: string;
     gender: "MALE" | "FEMALE";
     surname: string;
@@ -81,7 +76,6 @@ export declare const UserSchema: z.ZodObject<{
     createdAt: string;
 }, {
     status: "PENDING_APPROVAL" | "ACTIVE" | "DEACTIVATED";
-    email: string;
     displayName: string;
     gender: "MALE" | "FEMALE";
     surname: string;
@@ -95,13 +89,10 @@ export declare const UserSchema: z.ZodObject<{
 }>;
 export type User = z.infer<typeof UserSchema>;
 export declare const UpdateUserSchema: z.ZodObject<{
-    email: z.ZodOptional<z.ZodString>;
     password: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-    email?: string | undefined;
     password?: string | undefined;
 }, {
-    email?: string | undefined;
     password?: string | undefined;
 }>;
 export type UpdateUserDto = z.infer<typeof UpdateUserSchema>;

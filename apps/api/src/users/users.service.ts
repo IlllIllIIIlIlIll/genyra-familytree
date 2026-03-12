@@ -7,52 +7,62 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findById(id: string): Promise<User> {
-    const user = await this.prisma.user.findUnique({ where: { id } })
-    if (!user) throw new NotFoundException('User not found')
-    return this.toUserDto(user)
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: { personNode: true },
+    })
+    if (!user || !user.personNode) throw new NotFoundException('User not found')
+    return this.toUserDto(user, user.personNode)
   }
 
   async findPendingByGroup(familyGroupId: string): Promise<User[]> {
     const users = await this.prisma.user.findMany({
-      where: { familyGroupId, status: 'PENDING_APPROVAL' },
+      where: {
+        status: 'PENDING_APPROVAL',
+        personNode: { familyGroupId },
+      },
+      include: { personNode: true },
     })
-    return users.map((u) => this.toUserDto(u))
+    return users.map((u) => this.toUserDto(u, u.personNode!))
   }
 
   async updateStatus(userId: string, status: MemberStatus): Promise<User> {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: { status },
+      include: { personNode: true },
     })
-    return this.toUserDto(user)
+    return this.toUserDto(user, user.personNode!)
   }
 
-  private toUserDto(user: {
-    id: string
-    email: string
-    displayName: string
-    gender: 'MALE' | 'FEMALE'
-    surname: string
-    nik: string
-    birthDate: Date
-    birthPlace: string
-    role: string
-    status: string
-    familyGroupId: string | null
-    createdAt: Date
-  }): User {
+  private toUserDto(
+    user: {
+      id: string
+      nik: string
+      role: string
+      status: string
+      createdAt: Date
+    },
+    node: {
+      displayName: string
+      gender: 'MALE' | 'FEMALE' | null
+      surname: string | null
+      birthDate: Date | null
+      birthPlace: string | null
+      familyGroupId: string | null
+    },
+  ): User {
     return {
       id: user.id,
-      email: user.email,
-      displayName: user.displayName,
-      gender: user.gender,
-      surname: user.surname,
       nik: user.nik,
-      birthDate: user.birthDate.toISOString(),
-      birthPlace: user.birthPlace,
+      displayName: node.displayName,
+      gender: (node.gender as User['gender']) ?? 'MALE',
+      surname: node.surname ?? '',
+      birthDate: node.birthDate?.toISOString() ?? '',
+      birthPlace: node.birthPlace ?? '',
       role: user.role as User['role'],
       status: user.status as User['status'],
-      familyGroupId: user.familyGroupId,
+      familyGroupId: node.familyGroupId,
       createdAt: user.createdAt.toISOString(),
     }
   }

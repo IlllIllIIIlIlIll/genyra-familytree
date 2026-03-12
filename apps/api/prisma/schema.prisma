@@ -45,29 +45,18 @@ enum InviteStatus {
 
 model User {
   id           String       @id @default(cuid())
-  email        String       @unique
+  nik          String       @unique
   passwordHash String
   role         UserRole     @default(FAMILY_MEMBER)
   status       MemberStatus @default(ACTIVE)
   refreshToken String?
 
-  // Identity fields
-  displayName String
-  gender      Gender
-  surname     String
-  nik         String   @unique
-  birthDate   DateTime
-  birthPlace  String
-
-  familyGroupId String?
-  familyGroup   FamilyGroup? @relation("GroupMembers", fields: [familyGroupId], references: [id])
-
-  personNode PersonNode?
+  personNode   PersonNode?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([familyGroupId])
+  @@index([nik])
 }
 
 model FamilyGroup {
@@ -75,8 +64,7 @@ model FamilyGroup {
   name        String
   description String?
 
-  members     User[]       @relation("GroupMembers")
-  personNodes PersonNode[]
+  members     PersonNode[]
   invites     Invite[]
 
   createdAt DateTime @default(now())
@@ -103,8 +91,8 @@ model PersonNode {
   userId String? @unique
   user   User?   @relation(fields: [userId], references: [id])
 
-  familyGroupId String
-  familyGroup   FamilyGroup @relation(fields: [familyGroupId], references: [id])
+  familyGroupId String?
+  familyGroup   FamilyGroup? @relation(fields: [familyGroupId], references: [id])
 
   photos PersonPhoto[]
 

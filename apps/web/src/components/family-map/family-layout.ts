@@ -313,12 +313,21 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
         }
       }
 
-      const totalW =
-        units.reduce((s, u) => s + u.w, 0) +
-        UNIT_GAP * Math.max(units.length - 1, 0)
-
       const juncCenterX = junc.x + JUNCTION_SIZE / 2
-      let startX = juncCenterX - totalW / 2
+      const n = units.length
+
+      // Odd number of units: align the middle unit's centre over the junction.
+      // Even number of units: centre the whole group over the junction.
+      let startX: number
+      if (n % 2 === 1) {
+        const midIdx = Math.floor(n / 2)
+        let widthBefore = 0
+        for (let i = 0; i < midIdx; i++) widthBefore += units[i]!.w + UNIT_GAP
+        startX = juncCenterX - units[midIdx]!.w / 2 - widthBefore
+      } else {
+        const totalW = units.reduce((s, u) => s + u.w, 0) + UNIT_GAP * Math.max(n - 1, 0)
+        startX = juncCenterX - totalW / 2
+      }
 
       // Enforce right-edge constraint so groups don't overlap on the same row
       const prevRight = rightEdgeByY.get(childY) ?? -Infinity
@@ -342,6 +351,30 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
       const childXs = group.childIds.map((id) => (positions.get(id)?.x ?? 0) + NODE_W / 2)
       const newJuncCX = (Math.min(...childXs) + Math.max(...childXs)) / 2
       junc.x = newJuncCX - JUNCTION_SIZE / 2
+    }
+  }
+
+  // ── Final overlap resolution ───────────────────────────────────────────────
+  // After child repositioning, nodes on the same row might still overlap.
+  // Sort each Y-level by X and enforce a minimum gap between every adjacent pair.
+  {
+    const byY = new Map<number, string[]>()
+    for (const [id, pos] of positions) {
+      const yKey = Math.round(pos.y)
+      if (!byY.has(yKey)) byY.set(yKey, [])
+      byY.get(yKey)!.push(id)
+    }
+    for (const ids of byY.values()) {
+      if (ids.length <= 1) continue
+      ids.sort((a, b) => (positions.get(a)?.x ?? 0) - (positions.get(b)?.x ?? 0))
+      for (let i = 1; i < ids.length; i++) {
+        const prev = positions.get(ids[i - 1]!)!
+        const curr = positions.get(ids[i]!)!
+        const isCouple = spousePairs.get(ids[i - 1]!) === ids[i]
+        const minGap   = isCouple ? COUPLE_GAP : Math.max(UNIT_GAP / 2, 20)
+        const minX     = prev.x + NODE_W + minGap
+        if (curr.x < minX) positions.set(ids[i]!, { ...curr, x: minX })
+      }
     }
   }
 

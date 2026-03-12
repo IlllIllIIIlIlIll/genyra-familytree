@@ -15,7 +15,7 @@ export declare const PersonNodeSchema: z.ZodObject<{
     canvasX: z.ZodNumber;
     canvasY: z.ZodNumber;
     userId: z.ZodNullable<z.ZodString>;
-    familyGroupId: z.ZodString;
+    familyGroupId: z.ZodNullable<z.ZodString>;
     createdAt: z.ZodString;
     updatedAt: z.ZodString;
 }, "strip", z.ZodTypeAny, {
@@ -26,7 +26,7 @@ export declare const PersonNodeSchema: z.ZodObject<{
     birthDate: string | null;
     birthPlace: string | null;
     id: string;
-    familyGroupId: string;
+    familyGroupId: string | null;
     createdAt: string;
     deathDate: string | null;
     bio: string | null;
@@ -45,7 +45,7 @@ export declare const PersonNodeSchema: z.ZodObject<{
     birthDate: string | null;
     birthPlace: string | null;
     id: string;
-    familyGroupId: string;
+    familyGroupId: string | null;
     createdAt: string;
     deathDate: string | null;
     bio: string | null;

@@ -16,13 +16,18 @@ export class InvitesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async generate(requestingUserId: string): Promise<Invite> {
-    const user = await this.prisma.user.findUnique({ where: { id: requestingUserId } })
+    const user = await this.prisma.user.findUnique({
+      where: { id: requestingUserId },
+      include: { personNode: true },
+    })
     if (user?.role !== 'FAMILY_HEAD') {
       throw new ForbiddenException('Only Family Head can generate invite codes')
     }
-    if (!user.familyGroupId) {
+    if (!user.personNode?.familyGroupId) {
       throw new ForbiddenException('User has no family group')
     }
+
+    const familyGroupId = user.personNode.familyGroupId
 
     let code: string
     let attempts = 0
@@ -39,7 +44,7 @@ export class InvitesService {
       data: {
         code,
         expiresAt,
-        familyGroupId: user.familyGroupId,
+        familyGroupId,
       },
     })
 
@@ -55,8 +60,11 @@ export class InvitesService {
   }
 
   async listByGroup(familyGroupId: string, requestingUserId: string): Promise<Invite[]> {
-    const user = await this.prisma.user.findUnique({ where: { id: requestingUserId } })
-    if (user?.role !== 'FAMILY_HEAD' || user.familyGroupId !== familyGroupId) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: requestingUserId },
+      include: { personNode: true },
+    })
+    if (user?.role !== 'FAMILY_HEAD' || user.personNode?.familyGroupId !== familyGroupId) {
       throw new ForbiddenException('Access denied')
     }
 

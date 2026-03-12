@@ -18,15 +18,18 @@ export class FamilyGroupsService {
       data: {
         name: dto.name,
         description: dto.description ?? null,
-        members: {
-          connect: { id: creatorId },
-        },
       },
     })
 
     await this.prisma.user.update({
       where: { id: creatorId },
-      data: { role: 'FAMILY_HEAD', status: 'ACTIVE', familyGroupId: group.id },
+      data: {
+        role: 'FAMILY_HEAD',
+        status: 'ACTIVE',
+        personNode: {
+          update: { familyGroupId: group.id },
+        },
+      },
     })
 
     return this.toFamilyGroupDto(group)
@@ -45,14 +48,16 @@ export class FamilyGroupsService {
     dto: CreateFamilyWithParentsDto,
     creatorId: string,
   ): Promise<FamilyGroup> {
-    const creator = await this.prisma.user.findUnique({ where: { id: creatorId } })
-    if (!creator) throw new NotFoundException('User not found')
-    if (creator.familyGroupId) throw new BadRequestException('User already has a family group')
+    const creator = await this.prisma.user.findUnique({
+      where: { id: creatorId },
+      include: { personNode: true },
+    })
+    if (!creator || !creator.personNode) throw new NotFoundException('User not found')
+    if (creator.personNode.familyGroupId) throw new BadRequestException('User already has a family group')
 
     const group = await this.prisma.familyGroup.create({
       data: {
         name: dto.familyName,
-        members: { connect: { id: creatorId } },
       },
     })
 
@@ -61,17 +66,10 @@ export class FamilyGroupsService {
     // Determine which parent the user is
     const userIsFather = dto.userIsParent === 'FATHER'
 
-    // Create the user's own PersonNode
-    const userNode = await this.prisma.personNode.create({
+    // Update the user's own PersonNode with placement and group
+    const userNode = await this.prisma.personNode.update({
+      where: { id: creator.personNode.id },
       data: {
-        displayName: creator.displayName,
-        gender: creator.gender,
-        surname: creator.surname,
-        nik: creator.nik,
-        birthDate: creator.birthDate,
-        birthPlace: creator.birthPlace,
-        isPlaceholder: false,
-        userId: creatorId,
         familyGroupId: groupId,
         canvasX: userIsFather ? 0 : 300,
         canvasY: 0,
@@ -109,7 +107,6 @@ export class FamilyGroupsService {
       data: {
         role: 'FAMILY_HEAD',
         status: 'ACTIVE',
-        familyGroupId: groupId,
       },
     })
 
@@ -131,29 +128,21 @@ export class FamilyGroupsService {
       throw new BadRequestException('Invalid or expired invite code')
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: requestingUserId } })
-    if (!user) throw new NotFoundException('User not found')
-    if (user.familyGroupId) throw new BadRequestException('User is already in a family group')
+    const user = await this.prisma.user.findUnique({
+      where: { id: requestingUserId },
+      include: { personNode: true },
+    })
+    if (!user || !user.personNode) throw new NotFoundException('User not found')
+    if (user.personNode.familyGroupId) throw new BadRequestException('User is already in a family group')
 
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id: requestingUserId },
         data: {
-          familyGroupId: invite.familyGroupId,
           status: 'PENDING_APPROVAL',
-        },
-      })
-
-      await tx.personNode.create({
-        data: {
-          displayName: user.displayName,
-          gender: user.gender,
-          surname: user.surname,
-          nik: user.nik,
-          birthDate: user.birthDate,
-          birthPlace: user.birthPlace,
-          userId: user.id,
-          familyGroupId: invite.familyGroupId,
+          personNode: {
+            update: { familyGroupId: invite.familyGroupId },
+          },
         },
       })
 
@@ -169,8 +158,9 @@ export class FamilyGroupsService {
   async getMapData(groupId: string, requestingUserId: string): Promise<MapData> {
     const user = await this.prisma.user.findUnique({
       where: { id: requestingUserId },
+      include: { personNode: true },
     })
-    if (!user || user.familyGroupId !== groupId) {
+    if (!user || user.personNode?.familyGroupId !== groupId) {
       throw new ForbiddenException('Not a member of this family group')
     }
 

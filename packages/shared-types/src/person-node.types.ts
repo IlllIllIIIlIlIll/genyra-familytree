@@ -17,7 +17,7 @@ export const PersonNodeSchema = z.object({
   canvasX: z.number(),
   canvasY: z.number(),
   userId: z.string().nullable(),
-  familyGroupId: z.string(),
+  familyGroupId: z.string().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 })

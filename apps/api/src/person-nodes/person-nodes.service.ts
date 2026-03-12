@@ -14,11 +14,14 @@ export class PersonNodesService {
   }
 
   async createForUser(dto: CreatePersonNodeDto, userId: string): Promise<PersonNode> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } })
-    if (!user?.familyGroupId) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { personNode: true },
+    })
+    if (!user?.personNode?.familyGroupId) {
       throw new ForbiddenException('User does not belong to a family group')
     }
-    return this.create(dto, user.familyGroupId)
+    return this.create(dto, user.personNode.familyGroupId)
   }
 
   async create(dto: CreatePersonNodeDto, familyGroupId: string): Promise<PersonNode> {
@@ -110,7 +113,7 @@ export class PersonNodesService {
     canvasX: number
     canvasY: number
     userId: string | null
-    familyGroupId: string
+    familyGroupId: string | null
     createdAt: Date
     updatedAt: Date
   }): PersonNode {

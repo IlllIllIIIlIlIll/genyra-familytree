@@ -19,7 +19,7 @@ exports.PersonNodeSchema = zod_1.z.object({
     canvasX: zod_1.z.number(),
     canvasY: zod_1.z.number(),
     userId: zod_1.z.string().nullable(),
-    familyGroupId: zod_1.z.string(),
+    familyGroupId: zod_1.z.string().nullable(),
     createdAt: zod_1.z.string().datetime(),
     updatedAt: zod_1.z.string().datetime(),
 });

@@ -17,13 +17,6 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto): Promise<{ message: string }> {
-    const existingEmail = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-    })
-    if (existingEmail) {
-      throw new BadRequestException('Email already registered')
-    }
-
     const existingNik = await this.prisma.user.findUnique({
       where: { nik: dto.nik },
     })
@@ -32,18 +25,23 @@ export class AuthService {
     }
 
     const passwordHash = await argon2.hash(dto.password)
+    const birthDate = new Date(dto.birthDate)
 
     await this.prisma.user.create({
       data: {
-        email: dto.email,
-        passwordHash,
-        displayName: dto.displayName,
-        gender: dto.gender,
-        surname: dto.surname,
         nik: dto.nik,
-        birthDate: new Date(dto.birthDate),
-        birthPlace: dto.birthPlace,
+        passwordHash,
         status: 'ACTIVE',
+        personNode: {
+          create: {
+            displayName: dto.displayName,
+            surname: dto.surname,
+            gender: dto.gender,
+            nik: dto.nik,
+            birthDate,
+            birthPlace: dto.birthPlace,
+          },
+        },
       },
     })
 
@@ -52,7 +50,7 @@ export class AuthService {
 
   async login(dto: LoginDto): Promise<AuthTokens> {
     const user = await this.prisma.user.findUnique({
-      where: { email: dto.email },
+      where: { nik: dto.nik },
     })
 
     if (!user) throw new UnauthorizedException('Invalid credentials')
@@ -64,7 +62,7 @@ export class AuthService {
       throw new ForbiddenException('Account has been deactivated')
     }
 
-    return this.generateTokens(user.id, user.email, user.role)
+    return this.generateTokens(user.id, user.role)
   }
 
   async refreshTokens(userId: string, refreshToken: string): Promise<AuthTokens> {
@@ -74,7 +72,7 @@ export class AuthService {
     const tokenValid = await argon2.verify(user.refreshToken, refreshToken)
     if (!tokenValid) throw new UnauthorizedException('Invalid refresh token')
 
-    return this.generateTokens(user.id, user.email, user.role)
+    return this.generateTokens(user.id, user.role)
   }
 
   async logout(userId: string): Promise<void> {
@@ -86,10 +84,9 @@ export class AuthService {
 
   private async generateTokens(
     userId: string,
-    email: string,
     role: string,
   ): Promise<AuthTokens> {
-    const payload = { sub: userId, email, role }
+    const payload = { sub: userId, role }
 
     const accessSecret = process.env['JWT_ACCESS_SECRET']
     const refreshSecret = process.env['JWT_REFRESH_SECRET']

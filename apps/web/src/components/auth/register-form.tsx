@@ -96,7 +96,7 @@ export function RegisterForm() {
       {/* Birth date */}
       <Input
         id="birthDate"
-        type="datetime-local"
+        type="date"
         label="Date of Birth"
         {...register('birthDate')}
         error={errors.birthDate?.message ?? undefined}
@@ -110,17 +110,6 @@ export function RegisterForm() {
         maxLength={MAX_CHARS.BIRTH_PLACE}
         {...register('birthPlace')}
         error={errors.birthPlace?.message ?? undefined}
-      />
-
-      {/* Email */}
-      <Input
-        id="email"
-        type="email"
-        label="Email"
-        placeholder="you@example.com"
-        autoComplete="email"
-        {...register('email')}
-        error={errors.email?.message ?? undefined}
       />
 
       {/* Password */}

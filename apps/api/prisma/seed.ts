@@ -19,52 +19,62 @@ async function main() {
   // ── Demo family: Santoso ───────────────────────────────────────────────────
   const passwordHash = await argon2.hash('password123')
 
-  // ── Registered users ───────────────────────────────────────────────────────
-  const budi = await prisma.user.create({
-    data: {
-      email: 'budi@example.com',
-      passwordHash,
-      displayName: 'Budi Santoso',
-      gender: 'MALE',
-      surname: 'Santoso',
-      nik: '3276011009900001',
-      birthDate: new Date('1990-09-10'),
-      birthPlace: 'Jakarta',
-      role: 'FAMILY_HEAD',
-      status: 'ACTIVE',
-    },
-  })
-
-  const siti = await prisma.user.create({
-    data: {
-      email: 'siti@example.com',
-      passwordHash,
-      displayName: 'Siti Rahayu',
-      gender: 'FEMALE',
-      surname: 'Rahayu',
-      nik: '3271014505920002',
-      birthDate: new Date('1992-05-05'),
-      birthPlace: 'Bandung',
-      role: 'FAMILY_MEMBER',
-      status: 'ACTIVE',
-    },
-  })
-
   // ── Create family group ────────────────────────────────────────────────────
   const familyGroup = await prisma.familyGroup.create({
     data: {
       name: 'Keluarga Santoso',
       description: 'Demo family — Santoso lineage',
-      members: { connect: [{ id: budi.id }, { id: siti.id }] },
     },
   })
+  const g = familyGroup.id
 
-  await prisma.user.updateMany({
-    where: { id: { in: [budi.id, siti.id] } },
-    data: { familyGroupId: familyGroup.id },
+  // ── Registered users (and their persona nodes) ──────────────────────────────
+  // Budi (Family Head)
+  const budi = await prisma.user.create({
+    data: {
+      nik: '3276011009900001',
+      passwordHash,
+      role: 'FAMILY_HEAD',
+      status: 'ACTIVE',
+      personNode: {
+        create: {
+          displayName: 'Budi Santoso',
+          gender: 'MALE',
+          surname: 'Santoso',
+          nik: '3276011009900001',
+          birthDate: new Date('1990-09-10'),
+          birthPlace: 'Jakarta',
+          familyGroupId: g,
+        },
+      },
+    },
+    include: { personNode: true },
   })
 
-  const g = familyGroup.id
+  // Siti (Family Member)
+  const siti = await prisma.user.create({
+    data: {
+      nik: '3271014505920002',
+      passwordHash,
+      role: 'FAMILY_MEMBER',
+      status: 'ACTIVE',
+      personNode: {
+        create: {
+          displayName: 'Siti Rahayu',
+          gender: 'FEMALE',
+          surname: 'Rahayu',
+          nik: '3271014505920002',
+          birthDate: new Date('1992-05-05'),
+          birthPlace: 'Bandung',
+          familyGroupId: g,
+        },
+      },
+    },
+    include: { personNode: true },
+  })
+
+  const budiNode = budi.personNode!
+  const sitiNode = siti.personNode!
 
   const node = async (data: Parameters<typeof prisma.personNode.create>[0]['data']) =>
     prisma.personNode.create({ data: { ...data, familyGroupId: g, canvasX: 0, canvasY: 0 } })
@@ -162,18 +172,7 @@ async function main() {
   })
 
   // Ahmad + Sri's three children
-
-  const budiNode = await node({
-    displayName: 'Budi Santoso', gender: 'MALE', surname: 'Santoso',
-    nik: budi.nik, birthDate: new Date('1990-09-10'), birthPlace: 'Jakarta',
-    userId: budi.id,
-  })
-
-  const sitiNode = await node({
-    displayName: 'Siti Rahayu', gender: 'FEMALE', surname: 'Rahayu',
-    nik: siti.nik, birthDate: new Date('1992-05-05'), birthPlace: 'Bandung',
-    userId: siti.id,
-  })
+  // (budiNode and sitiNode were created above with their User accounts)
 
   const dewi = await node({
     displayName: 'Dewi Santoso', gender: 'FEMALE', surname: 'Santoso',
@@ -311,8 +310,8 @@ async function main() {
   console.log('  • Cousin marriage (incest): Bagas + Zahra share grandparents Ahmad+Sri')
   console.log('')
   console.log('Demo accounts:')
-  console.log('  budi@example.com  / password123  (Family Head)')
-  console.log('  siti@example.com  / password123  (Family Member)')
+  console.log(`  NIK: ${budi.nik}  / password123  (Family Head)`)
+  console.log(`  NIK: ${siti.nik}  / password123  (Family Member)`)
 }
 
 main()

@@ -66,7 +66,6 @@ export const PersonNodeComponent = memo(function PersonNodeComponent({
           'flex flex-col items-center gap-2 p-3 cursor-pointer select-none',
           'rounded-2xl border shadow-sm transition-all',
           cardColorCls(node.gender, node.isDeceased),
-          node.isDeceased ? 'opacity-75' : '',
           selected
             ? selectedCls(node.gender, node.isDeceased)
             : hoverCls(node.gender, node.isDeceased),

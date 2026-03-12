@@ -2,18 +2,21 @@
 
 import {
   ReactFlow,
+  ReactFlowProvider,
+  Panel,
   Background,
   BackgroundVariant,
   Controls,
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   type Node,
   type Edge,
   type NodeChange,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toPng } from 'html-to-image'
@@ -56,10 +59,10 @@ interface FamilyMapCanvasProps {
 // Use visualViewport when available (more accurate on mobile — excludes browser chrome).
 function getMinimapSize(): { width: number; height: number } {
   if (typeof window === 'undefined') return { width: 120, height: 75 }
-  const vp  = window.visualViewport
-  const vw  = vp?.width  ?? window.innerWidth
-  const vh  = vp?.height ?? window.innerHeight
-  const ratio  = vw / vh
+  const vp    = window.visualViewport
+  const vw    = vp?.width  ?? window.innerWidth
+  const vh    = vp?.height ?? window.innerHeight
+  const ratio = vw / vh
   const BASE_H = 75
   if (ratio >= 1) {
     return { width: Math.min(Math.max(Math.round(BASE_H * ratio), 80), 200), height: BASE_H }
@@ -67,7 +70,7 @@ function getMinimapSize(): { width: number; height: number } {
   return { width: BASE_H, height: Math.min(Math.max(Math.round(BASE_H / ratio), 80), 150) }
 }
 
-// ── SVG eye icons ──────────────────────────────────────────────────────────────
+// ── SVG icons ──────────────────────────────────────────────────────────────────
 function EyeIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
@@ -107,16 +110,41 @@ function DownloadIcon() {
   )
 }
 
-export function FamilyMapCanvas({ familyGroupId }: FamilyMapCanvasProps) {
+function PersonIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+    </svg>
+  )
+}
+
+function RefreshIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+      <path d="M8 16H3v5" />
+    </svg>
+  )
+}
+
+// ── Inner component (must be inside ReactFlowProvider to use useReactFlow) ─────
+function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
+  const { fitView, setCenter, getNode, getViewport, setViewport } = useReactFlow()
+  const queryClient = useQueryClient()
+
   const {
     isProfilePanelOpen, selectedNodeId,
     closeProfilePanel, openProfilePanel,
     isCleanView, toggleCleanView,
   } = useMapUIStore()
 
-  const router     = useRouter()
-  const clearAuth  = useAuthStore((s) => s.clear)
-  const canvasRef  = useRef<HTMLDivElement>(null)
+  const router        = useRouter()
+  const clearAuth     = useAuthStore((s) => s.clear)
+  const currentUserId = useAuthStore((s) => s.userId)
+  const canvasRef     = useRef<HTMLDivElement>(null)
   const [minimapSize, setMinimapSize] = useState(getMinimapSize)
 
   useEffect(() => {
@@ -131,7 +159,7 @@ export function FamilyMapCanvas({ familyGroupId }: FamilyMapCanvasProps) {
 
   const { data: mapData, isLoading } = useQuery({
     queryKey: ['map-data', familyGroupId],
-    queryFn: () => apiClient.getMapData(familyGroupId),
+    queryFn:  () => apiClient.getMapData(familyGroupId),
   })
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<FlowNodeData>>([])
@@ -151,7 +179,7 @@ export function FamilyMapCanvas({ familyGroupId }: FamilyMapCanvasProps) {
       const pos = positions.get(n.id) ?? { x: n.canvasX, y: n.canvasY }
       return {
         id: n.id, type: 'personNode', position: pos,
-        data: { node: n, isCurrentUser: false } satisfies PersonNodeData,
+        data: { node: n, isCurrentUser: n.userId === currentUserId } satisfies PersonNodeData,
         draggable: true,
       }
     })
@@ -168,7 +196,7 @@ export function FamilyMapCanvas({ familyGroupId }: FamilyMapCanvasProps) {
       sourceHandle: em.sourceHandle, targetHandle: em.targetHandle,
       type: em.edgeType, data: { relationshipType: em.relationshipType },
     })))
-  }, [mapData, setNodes, setEdges])
+  }, [mapData, setNodes, setEdges, currentUserId])
 
   const handleNodesChange = useCallback(
     (changes: NodeChange<Node<FlowNodeData>>[]) => {
@@ -203,19 +231,44 @@ export function FamilyMapCanvas({ familyGroupId }: FamilyMapCanvasProps) {
     router.push('/login')
   }, [clearAuth, router])
 
+  // Refresh: invalidate the map data query and re-run fitView once loaded.
+  const handleRefresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ['map-data', familyGroupId] })
+  }, [queryClient, familyGroupId])
+
+  // Navigate to the current user's person node, centred and zoomed.
+  const currentUserPersonNode = mapData?.nodes.find((n) => n.userId === currentUserId)
+  const handleViewCurrentUser = useCallback(() => {
+    if (!currentUserPersonNode) return
+    const rfNode = getNode(currentUserPersonNode.id)
+    if (!rfNode) return
+    setCenter(
+      rfNode.position.x + CANVAS.NODE_W / 2,
+      rfNode.position.y + CANVAS.NODE_H / 2,
+      { zoom: 1.5, duration: 600 },
+    )
+  }, [currentUserPersonNode, getNode, setCenter])
+
+  // Download: fit the view first so the export shows the full tree.
   const handleDownload = useCallback(async () => {
     const el = canvasRef.current
     if (!el) return
+    const savedViewport = getViewport()
     try {
+      await fitView({ padding: CANVAS.FIT_PADDING, duration: 0 })
+      // Give the browser a paint cycle to apply the new viewport transform.
+      await new Promise<void>((r) => { requestAnimationFrame(() => { requestAnimationFrame(() => r()) }) })
       const dataUrl = await toPng(el, { backgroundColor: '#f5f0e8', quality: 0.95 })
       const a = document.createElement('a')
-      a.href    = dataUrl
+      a.href     = dataUrl
       a.download = `${mapData?.familyName ?? 'family-tree'}.png`
       a.click()
     } catch {
       // Silent fail — toPng can fail on cross-origin images
+    } finally {
+      setViewport(savedViewport, { duration: 0 })
     }
-  }, [mapData?.familyName])
+  }, [mapData?.familyName, fitView, getViewport, setViewport])
 
   const selectedNode = mapData?.nodes.find((n) => n.id === selectedNodeId)
 
@@ -295,6 +348,31 @@ export function FamilyMapCanvas({ familyGroupId }: FamilyMapCanvasProps) {
             gap={32}
             size={5}
           />
+
+          {/* ── Person + Refresh buttons (above the standard Controls) ───────── */}
+          {!isCleanView && (
+            <Panel position="bottom-left" style={{ bottom: 110 }}>
+              <div className="flex flex-col gap-1">
+                {currentUserPersonNode && (
+                  <button
+                    onClick={handleViewCurrentUser}
+                    className="react-flow__controls-button"
+                    title="Find me on the map"
+                  >
+                    <PersonIcon />
+                  </button>
+                )}
+                <button
+                  onClick={handleRefresh}
+                  className="react-flow__controls-button"
+                  title="Reset tree layout"
+                >
+                  <RefreshIcon />
+                </button>
+              </div>
+            </Panel>
+          )}
+
           {!isCleanView && (
             <Controls className="!shadow-sm !border-stone-200" showInteractive={false} />
           )}
@@ -308,7 +386,7 @@ export function FamilyMapCanvas({ familyGroupId }: FamilyMapCanvasProps) {
           )}
         </ReactFlow>
 
-        {/* ── Eye toggle (always visible, top-right corner of canvas) ───────── */}
+        {/* ── Eye toggle (always visible, top-right corner of canvas) ─────── */}
         <button
           onClick={toggleCleanView}
           className="absolute top-3 right-3 z-20 p-2 rounded-full bg-white/80 backdrop-blur-sm shadow-sm border border-stone-200 text-slate-500 hover:bg-white hover:text-slate-700 transition-colors"
@@ -325,5 +403,14 @@ export function FamilyMapCanvas({ familyGroupId }: FamilyMapCanvasProps) {
         )}
       </div>
     </div>
+  )
+}
+
+// ── Public export: wraps with ReactFlowProvider so useReactFlow() works ────────
+export function FamilyMapCanvas({ familyGroupId }: FamilyMapCanvasProps) {
+  return (
+    <ReactFlowProvider>
+      <FamilyMapInner familyGroupId={familyGroupId} />
+    </ReactFlowProvider>
   )
 }

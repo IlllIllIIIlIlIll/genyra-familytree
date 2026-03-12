@@ -28,7 +28,7 @@ export function LoginForm() {
       router.push('/map')
     },
     onError: () => {
-      setError('root', { message: 'Invalid email or password' })
+      setError('root', { message: 'Invalid NIK or password' })
     },
   })
 
@@ -37,13 +37,13 @@ export function LoginForm() {
   return (
     <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">
       <Input
-        id="email"
-        type="email"
-        label="Email"
-        placeholder="you@example.com"
-        autoComplete="email"
-        {...register('email')}
-        error={errors.email?.message}
+        id="nik"
+        label="NIK (16 digits)"
+        placeholder="3276011009040006"
+        inputMode="numeric"
+        maxLength={16}
+        {...register('nik')}
+        error={errors.nik?.message}
       />
       <Input
         id="password"

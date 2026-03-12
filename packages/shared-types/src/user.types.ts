@@ -10,7 +10,6 @@ export const MemberStatusSchema = z.enum(['PENDING_APPROVAL', 'ACTIVE', 'DEACTIV
 export type MemberStatus = z.infer<typeof MemberStatusSchema>
 
 export const RegisterSchema = z.object({
-  email: z.string().email(),
   password: z.string().min(8).max(100),
   displayName: z.string().min(1).max(100),
   gender: GenderSchema,
@@ -23,7 +22,9 @@ export const RegisterSchema = z.object({
     .string()
     .length(16)
     .regex(/^\d{16}$/, 'NIK must be exactly 16 digits'),
-  birthDate: z.string().datetime(),
+  birthDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
   birthPlace: z.string().min(1).max(100),
 })
 export type RegisterDto = z.infer<typeof RegisterSchema>
@@ -34,29 +35,28 @@ export const JoinGroupSchema = z.object({
 export type JoinGroupDto = z.infer<typeof JoinGroupSchema>
 
 export const LoginSchema = z.object({
-  email: z.string().email(),
+  nik: z.string().length(16).regex(/^\d{16}$/, 'NIK must be exactly 16 digits'),
   password: z.string().min(1),
 })
 export type LoginDto = z.infer<typeof LoginSchema>
 
 export const UserSchema = z.object({
   id: z.string(),
-  email: z.string().email(),
-  displayName: z.string(),
-  gender: GenderSchema,
-  surname: z.string(),
   nik: z.string(),
-  birthDate: z.string().datetime(),
-  birthPlace: z.string(),
   role: UserRoleSchema,
   status: MemberStatusSchema,
   familyGroupId: z.string().nullable(),
   createdAt: z.string().datetime(),
+  // All identity fields now come from PersonNode
+  displayName: z.string(),
+  gender: GenderSchema,
+  surname: z.string(),
+  birthDate: z.string(),
+  birthPlace: z.string(),
 })
 export type User = z.infer<typeof UserSchema>
 
 export const UpdateUserSchema = z.object({
-  email: z.string().email().optional(),
   password: z.string().min(8).max(100).optional(),
 })
 export type UpdateUserDto = z.infer<typeof UpdateUserSchema>
