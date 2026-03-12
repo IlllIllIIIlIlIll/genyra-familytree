@@ -1,0 +1,20 @@
+{
+  "name": "genyra-familytree",
+  "private": true,
+  "scripts": {
+    "dev:web": "pnpm --filter @genyra/web dev",
+    "dev:api": "pnpm --filter @genyra/api start:dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "type-check": "pnpm -r type-check",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @genyra/api test:e2e",
+    "db:generate": "pnpm --filter @genyra/api prisma:generate",
+    "db:migrate": "pnpm --filter @genyra/api prisma:migrate",
+    "db:studio": "pnpm --filter @genyra/api prisma:studio"
+  },
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  }
+}

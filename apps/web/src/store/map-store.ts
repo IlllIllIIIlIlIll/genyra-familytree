@@ -1,0 +1,58 @@
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
+
+interface AuthState {
+  accessToken: string | null
+  refreshToken: string | null
+  userId: string | null
+  familyGroupId: string | null
+  role: string | null
+  setTokens: (tokens: { accessToken: string; refreshToken: string }) => void
+  setUser: (user: { userId: string; familyGroupId: string | null; role: string }) => void
+  clear: () => void
+}
+
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      accessToken: null,
+      refreshToken: null,
+      userId: null,
+      familyGroupId: null,
+      role: null,
+      setTokens: (tokens) =>
+        set({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }),
+      setUser: (user) =>
+        set({ userId: user.userId, familyGroupId: user.familyGroupId, role: user.role }),
+      clear: () =>
+        set({
+          accessToken: null,
+          refreshToken: null,
+          userId: null,
+          familyGroupId: null,
+          role: null,
+        }),
+    }),
+    { name: 'genyra-auth' },
+  ),
+)
+
+interface MapUIState {
+  selectedNodeId: string | null
+  isProfilePanelOpen: boolean
+  isEditMode: boolean
+  setSelectedNode: (id: string | null) => void
+  openProfilePanel: (id: string) => void
+  closeProfilePanel: () => void
+  setEditMode: (value: boolean) => void
+}
+
+export const useMapUIStore = create<MapUIState>()((set) => ({
+  selectedNodeId: null,
+  isProfilePanelOpen: false,
+  isEditMode: false,
+  setSelectedNode: (id) => set({ selectedNodeId: id }),
+  openProfilePanel: (id) => set({ selectedNodeId: id, isProfilePanelOpen: true }),
+  closeProfilePanel: () => set({ isProfilePanelOpen: false, selectedNodeId: null }),
+  setEditMode: (value) => set({ isEditMode: value }),
+}))

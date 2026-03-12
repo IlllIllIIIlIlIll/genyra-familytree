@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+
+enum UserRole {
+  FAMILY_MEMBER
+  FAMILY_HEAD
+}
+
+enum MemberStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  DEACTIVATED
+}
+
+enum RelationshipType {
+  PARENT_CHILD
+  SPOUSE
+  SIBLING
+}
+
+enum InviteStatus {
+  UNUSED
+  USED
+  EXPIRED
+}
+
+// ─────────────────────────────────────────────
+// Core Tables
+// ─────────────────────────────────────────────
+
+model User {
+  id           String       @id @default(cuid())
+  email        String       @unique
+  passwordHash String
+  role         UserRole     @default(FAMILY_MEMBER)
+  status       MemberStatus @default(PENDING_APPROVAL)
+  refreshToken String?
+
+  familyGroupId String?
+  familyGroup   FamilyGroup? @relation("GroupMembers", fields: [familyGroupId], references: [id])
+
+  personNode PersonNode?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([familyGroupId])
+}
+
+model FamilyGroup {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  members     User[]       @relation("GroupMembers")
+  personNodes PersonNode[]
+  invites     Invite[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PersonNode {
+  id            String   @id @default(cuid())
+  displayName   String
+  birthDate     DateTime?
+  birthPlace    String?
+  deathDate     DateTime?
+  bio           String?
+  avatarUrl     String?
+  isDeceased    Boolean  @default(false)
+  isPlaceholder Boolean  @default(false)
+
+  canvasX Float @default(0)
+  canvasY Float @default(0)
+
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id])
+
+  familyGroupId String
+  familyGroup   FamilyGroup @relation(fields: [familyGroupId], references: [id])
+
+  photos PersonPhoto[]
+
+  relationshipsAsSource RelationshipEdge[] @relation("EdgeSource")
+  relationshipsAsTarget RelationshipEdge[] @relation("EdgeTarget")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([familyGroupId])
+}
+
+model RelationshipEdge {
+  id               String           @id @default(cuid())
+  relationshipType RelationshipType
+
+  sourceId String
+  source   PersonNode @relation("EdgeSource", fields: [sourceId], references: [id], onDelete: Cascade)
+
+  targetId String
+  target   PersonNode @relation("EdgeTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  marriageDate DateTime?
+  divorceDate  DateTime?
+  notes        String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([sourceId, targetId, relationshipType])
+  @@index([sourceId])
+  @@index([targetId])
+}
+
+model PersonPhoto {
+  id        String    @id @default(cuid())
+  url       String
+  caption   String?
+  takenAt   DateTime?
+  sortOrder Int       @default(0)
+
+  personNodeId String
+  personNode   PersonNode @relation(fields: [personNodeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model Invite {
+  id        String       @id @default(cuid())
+  code      String       @unique
+  status    InviteStatus @default(UNUSED)
+  expiresAt DateTime
+
+  familyGroupId String
+  familyGroup   FamilyGroup @relation(fields: [familyGroupId], references: [id])
+
+  createdAt DateTime  @default(now())
+  usedAt    DateTime?
+}
