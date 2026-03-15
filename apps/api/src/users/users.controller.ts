@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Body, UseGuards, Param } from '@nestjs/common'
+import { Controller, Get, Patch, Body, UseGuards, Param, Query } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { UsersService } from './users.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
@@ -18,6 +18,20 @@ export class UsersController {
   @ApiOperation({ summary: 'Get current user profile' })
   async getMe(@CurrentUser() user: JwtPayload): Promise<User> {
     return this.usersService.findById(user.sub)
+  }
+
+  @Get()
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_HEAD')
+  @ApiOperation({ summary: 'Get users by family group and status' })
+  async getByFamilyGroup(
+    @Query('familyGroupId') familyGroupId: string,
+    @Query('status') status?: string,
+  ): Promise<User[]> {
+    if (status === 'PENDING_APPROVAL') {
+      return this.usersService.findPendingByGroup(familyGroupId)
+    }
+    return []
   }
 
   @Patch(':id/status')

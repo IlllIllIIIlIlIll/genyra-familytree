@@ -92,6 +92,9 @@ export const apiClient = {
 
   getPendingUsers: async (): Promise<User[]> => {
     const me = await apiClient.getMe()
+    if (!me.familyGroupId) {
+      return []
+    }
     const { data } = await http.get<User[]>(`/users?familyGroupId=${me.familyGroupId}&status=PENDING_APPROVAL`)
     return data
   },
