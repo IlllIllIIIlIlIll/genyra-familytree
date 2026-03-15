@@ -45,7 +45,7 @@ export default function ApprovalsPage() {
               className="bg-white rounded-xl border border-brand-100 p-4 flex items-center justify-between gap-4"
             >
               <div>
-                <p className="font-medium text-slate-800 text-sm">{user.email}</p>
+                <p className="font-medium text-slate-800 text-sm">{user.nik}</p>
                 <p className="text-xs text-slate-400 mt-0.5">
                   Registered {new Date(user.createdAt).toLocaleDateString()}
                 </p>

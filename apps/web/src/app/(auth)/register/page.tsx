@@ -1,6 +1,8 @@
 'use client'
 
-import { RegisterForm } from '@/components/auth/register-form'
+import dynamic from 'next/dynamic'
+
+const RegisterForm = dynamic(() => import('@/components/auth/register-form').then(mod => mod.RegisterForm), { ssr: false })
 
 export default function RegisterPage() {
   return (
