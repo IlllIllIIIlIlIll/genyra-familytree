@@ -17,28 +17,26 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toPng } from 'html-to-image'
 import { apiClient } from '@/lib/api-client'
 import { useMapUIStore, useAuthStore } from '@/store/map-store'
 import { CANVAS, COLOR } from '@/lib/design-tokens'
 import { PersonNodeComponent } from './person-node'
-import { JunctionNodeComponent } from './junction-node'
 import { RelationshipEdgeComponent } from './relationship-edge'
-import { JunctionEdgeComponent } from './junction-edge'
+import { BracketEdgeComponent } from './bracket-edge'
 import { ProfileCard } from '@/components/profile/profile-card'
 import { computeFamilyLayout } from './family-layout'
 import type { PersonNode } from '@genyra/shared-types'
 
 const nodeTypes = {
-  personNode:   PersonNodeComponent,
-  junctionNode: JunctionNodeComponent,
+  personNode: PersonNodeComponent,
 }
 
 const edgeTypes = {
   relationshipEdge: RelationshipEdgeComponent,
-  junctionEdge:     JunctionEdgeComponent,
+  bracketEdge:      BracketEdgeComponent,
 }
 
 interface PersonNodeData extends Record<string, unknown> {
@@ -46,11 +44,7 @@ interface PersonNodeData extends Record<string, unknown> {
   isCurrentUser: boolean
 }
 
-interface JunctionData extends Record<string, unknown> {
-  isJunction: true
-}
-
-type FlowNodeData = PersonNodeData | JunctionData
+type FlowNodeData = PersonNodeData
 
 interface FamilyMapCanvasProps {
   familyGroupId: string
@@ -163,8 +157,13 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   })
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<FlowNodeData>>([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
-  const positionSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [rawEdges, setRawEdges, onEdgesChange] = useEdgesState<Edge>([])
+  const positionSaveTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const shouldFitViewRef   = useRef(false)
+  const [layoutVersion, setLayoutVersion] = useState(0)
+  const [translateExtent, setTranslateExtent] = useState<[[number, number], [number, number]]>(
+    [[-Infinity, -Infinity], [Infinity, Infinity]],
+  )
 
   const updatePositionMutation = useMutation({
     mutationFn: ({ id, x, y }: { id: string; x: number; y: number }) =>
@@ -173,7 +172,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
 
   useEffect(() => {
     if (!mapData) return
-    const { positions, junctions, edges: edgeMetas } = computeFamilyLayout(mapData)
+    const { positions, edges: edgeMetas } = computeFamilyLayout(mapData)
 
     const personNodes: Node<FlowNodeData>[] = mapData.nodes.map((n) => {
       const pos = positions.get(n.id) ?? { x: n.canvasX, y: n.canvasY }
@@ -184,19 +183,43 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
       }
     })
 
-    const junctionNodes: Node<FlowNodeData>[] = junctions.map((j) => ({
-      id: j.id, type: 'junctionNode', position: { x: j.x, y: j.y },
-      data: { isJunction: true } satisfies JunctionData,
-      draggable: false, selectable: false, focusable: false,
-    }))
-
-    setNodes([...personNodes, ...junctionNodes])
-    setEdges(edgeMetas.map((em) => ({
+    setNodes(personNodes)
+    setRawEdges(edgeMetas.map((em) => ({
       id: em.id, source: em.source, target: em.target,
       sourceHandle: em.sourceHandle, targetHandle: em.targetHandle,
-      type: em.edgeType, data: { relationshipType: em.relationshipType },
+      type: em.edgeType,
+      data: {
+        relationshipType: em.relationshipType,
+        ...(em.bracketParentIds && {
+          parentIds: em.bracketParentIds,
+          childIds:  em.bracketChildIds,
+          junctionY: em.bracketJunctionY,
+        }),
+      },
     })))
-  }, [mapData, setNodes, setEdges, currentUserId])
+
+    // Compute translate extent from layout bounding box + generous padding
+    if (positions.size > 0) {
+      const PAD = 600
+      const xs = [...positions.values()].map((p) => p.x)
+      const ys = [...positions.values()].map((p) => p.y)
+      setTranslateExtent([
+        [Math.min(...xs) - PAD, Math.min(...ys) - PAD],
+        [Math.max(...xs) + CANVAS.NODE_W + PAD, Math.max(...ys) + CANVAS.NODE_H + PAD],
+      ])
+    }
+
+    if (shouldFitViewRef.current) {
+      shouldFitViewRef.current = false
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          fitView({ padding: CANVAS.FIT_PADDING, duration: 400 })
+        })
+      })
+    }
+  // layoutVersion forces re-layout even when mapData hasn't changed (drag reset).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapData, layoutVersion, setNodes, setRawEdges, currentUserId, fitView])
 
   const handleNodesChange = useCallback(
     (changes: NodeChange<Node<FlowNodeData>>[]) => {
@@ -231,8 +254,11 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
     router.push('/login')
   }, [clearAuth, router])
 
-  // Refresh: invalidate the map data query and re-run fitView once loaded.
+  // Refresh: bump layoutVersion so the layout useEffect always re-runs (even if
+  // mapData hasn't changed), and flag fitView to fire after re-layout.
   const handleRefresh = useCallback(() => {
+    shouldFitViewRef.current = true
+    setLayoutVersion((v) => v + 1)
     void queryClient.invalidateQueries({ queryKey: ['map-data', familyGroupId] })
   }, [queryClient, familyGroupId])
 
@@ -269,6 +295,52 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
       setViewport(savedViewport, { duration: 0 })
     }
   }, [mapData?.familyName, fitView, getViewport, setViewport])
+
+  // Highlight only directly-connected edges for the selected node.
+  //
+  // Relationship edges (SPOUSE / SIBLING): highlight if node is source or target.
+  // Bracket edges: highlight the whole bracket if node is a PARENT.
+  //   If node is a CHILD, inject highlightedChildId instead (only that stem lights up).
+  const highlightedEdgeIds = useMemo(() => {
+    if (!selectedNodeId) return new Set<string>()
+    const ids = new Set<string>()
+    for (const e of rawEdges) {
+      const d       = e.data as Record<string, unknown> | undefined
+      const edgeType = (d?.edgeType ?? e.type) as string | undefined
+
+      if (edgeType === 'bracketEdge') {
+        const parents = (d?.parentIds as string[] | undefined) ?? []
+        // Only fully highlight when selected node is a PARENT (owns this bracket)
+        if (parents.includes(selectedNodeId)) ids.add(e.id)
+        // Child case handled via highlightedChildId in displayEdges below
+      } else {
+        // SPOUSE / SIBLING: direct connection only
+        if (e.source === selectedNodeId || e.target === selectedNodeId) ids.add(e.id)
+      }
+    }
+    return ids
+  }, [selectedNodeId, rawEdges])
+
+  const displayEdges = useMemo(
+    () => rawEdges.map((e) => {
+      const d        = e.data as Record<string, unknown> | undefined
+      const edgeType = (d?.edgeType ?? e.type) as string | undefined
+      const extra: Record<string, unknown> = {}
+
+      if (edgeType === 'bracketEdge' && selectedNodeId) {
+        const children = (d?.childIds as string[] | undefined) ?? []
+        if (children.includes(selectedNodeId)) {
+          extra.highlightedChildId = selectedNodeId
+        }
+      }
+
+      return {
+        ...e,
+        data: { ...(d ?? {}), highlighted: highlightedEdgeIds.has(e.id), ...extra },
+      }
+    }),
+    [rawEdges, highlightedEdgeIds, selectedNodeId],
+  )
 
   const selectedNode = mapData?.nodes.find((n) => n.id === selectedNodeId)
 
@@ -325,7 +397,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
       <div ref={canvasRef} className="flex-1 relative">
         <ReactFlow
           nodes={nodes}
-          edges={edges}
+          edges={displayEdges}
           onNodesChange={handleNodesChange}
           onEdgesChange={onEdgesChange}
           onNodeClick={handleNodeClick}
@@ -339,6 +411,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
           fitViewOptions={{ padding: CANVAS.FIT_PADDING }}
           minZoom={CANVAS.MIN_ZOOM}
           maxZoom={CANVAS.MAX_ZOOM}
+          translateExtent={translateExtent}
           proOptions={{ hideAttribution: true }}
           style={{ background: '#f5f0e8' }}
         >

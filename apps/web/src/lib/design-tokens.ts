@@ -39,8 +39,8 @@ export const CANVAS = {
   COUPLE_GAP:       24,   // horizontal gap between spouses
   UNIT_GAP:         80,   // horizontal gap between sibling-groups
   GEN_GAP:         220,   // vertical gap between generations
-  JUNCTION_SIZE:     6,   // junction dot diameter (px)
-  JUNCTION_OFFSET:  70,   // px below parent-row bottom where junction sits
+  JUNCTION_SIZE:     6,   // junction dot diameter (px) — kept for reference
+  JUNCTION_OFFSET:  35,   // px below parent-row bottom where the horizontal bar sits
   MIN_ZOOM:       0.05,
   MAX_ZOOM:          2,
   FIT_PADDING:    0.35,
@@ -70,6 +70,7 @@ export const COLOR = {
   EDGE_PARENT_CHILD:  '#e8829a',
   EDGE_SIBLING:       '#d4a0b0',
   EDGE_JUNCTION:      '#e8829a',
+  EDGE_HIGHLIGHT:     '#f43f5e',  // rose-500 — highlighted edge/connection
   MAP_GRID_DOT:       '#c4a882',  // warm sand — matches linen canvas bg
   MINIMAP_NODE:       '#e8829a',
   MINIMAP_MASK:       'rgba(248, 240, 242, 0.7)',

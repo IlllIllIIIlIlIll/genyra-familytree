@@ -14,27 +14,22 @@
  *             both are placed at the DEEPER (higher number) generation.
  *   Pass 3 — Any node still unassigned (totally disconnected) → gen 0.
  *
- * Junction nodes:
- *   - For every set of children sharing the same parent(s), one invisible
- *     junction node is placed between the parents and the children.
- *   - All sibling edges therefore emerge from the same point (the junction).
- *   - Junction X  = average centre-X of the parent(s).
- *   - Junction Y  = max(parent Y values) + NODE_H + JUNCTION_OFFSET.
- *     Using the deepest parent ensures cross-generation parents route the
- *     junction below the LOWER parent, not the shallower one.
+ * Bracket lines:
+ *   Instead of junction nodes and edges in React Flow, the layout returns
+ *   ParentGroupMeta objects that describe each family group's geometry.
+ *   The FamilyBracketOverlay component renders the H-bar bracket lines as
+ *   a plain SVG overlay, bypassing React Flow's edge-to-node coordinate system.
  *
- * Edge routing:
- *   - SPOUSE  : left ↔ right handles, bezier arc.
- *   - SIBLING : left ↔ right handles, smoothstep.
- *   - PARENT_CHILD: split into two junction edges —
- *       parent  (bottom) → junction (top)   smoothstep
- *       junction(bottom) → child   (top)    smoothstep
+ *   For each parent group:
+ *     - Parent stems: from each parent's bottom center straight down to junctionY.
+ *     - Horizontal bar: at junctionY, spanning leftmost to rightmost element.
+ *     - Child stems: from junctionY straight down to each child's top center.
  */
 
 import type { MapData } from '@genyra/shared-types'
 import { CANVAS } from '../../lib/design-tokens'
 
-const { NODE_W, NODE_H, COUPLE_GAP, UNIT_GAP, GEN_GAP, JUNCTION_SIZE, JUNCTION_OFFSET } = CANVAS
+const { NODE_W, NODE_H, COUPLE_GAP, UNIT_GAP, GEN_GAP, JUNCTION_OFFSET } = CANVAS
 
 // ─── Public types ─────────────────────────────────────────────────────────────
 
@@ -45,18 +40,15 @@ export interface FlowEdgeMeta {
   sourceHandle: string
   targetHandle: string
   relationshipType: string
-  edgeType: 'relationshipEdge' | 'junctionEdge'
-}
-
-export interface VirtualJunction {
-  id: string
-  x: number
-  y: number
+  edgeType: 'relationshipEdge' | 'bracketEdge'
+  // Only set on bracketEdge
+  bracketParentIds?: string[]
+  bracketChildIds?:  string[]
+  bracketJunctionY?: number
 }
 
 export interface LayoutResult {
   positions: Map<string, { x: number; y: number }>
-  junctions: VirtualJunction[]
   edges: FlowEdgeMeta[]
 }
 
@@ -77,10 +69,15 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
   const childrenOf  = new Map<string, Set<string>>()
   const parentsOf   = new Map<string, Set<string>>()
 
+  // spouseAllOf tracks ALL spouses per person (handles sequential remarriage)
+  const spouseAllOf = new Map<string, string[]>()
+
   for (const e of edges) {
     if (e.relationshipType === 'SPOUSE') {
-      spousePairs.set(e.sourceId, e.targetId)
-      spousePairs.set(e.targetId, e.sourceId)
+      if (!spouseAllOf.has(e.sourceId)) spouseAllOf.set(e.sourceId, [])
+      if (!spouseAllOf.has(e.targetId)) spouseAllOf.set(e.targetId, [])
+      spouseAllOf.get(e.sourceId)!.push(e.targetId)
+      spouseAllOf.get(e.targetId)!.push(e.sourceId)
     }
     if (e.relationshipType === 'PARENT_CHILD') {
       if (!childrenOf.has(e.sourceId)) childrenOf.set(e.sourceId, new Set())
@@ -90,19 +87,18 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
     }
   }
 
+  // Resolve spousePairs: for each person with multiple spouses, prefer the
+  // living one; if all are deceased (or all are alive), just pick the last.
+  for (const [personId, partnerIds] of spouseAllOf) {
+    if (partnerIds.length === 1) {
+      spousePairs.set(personId, partnerIds[0]!)
+    } else {
+      const living = partnerIds.find((id) => !nodeById.get(id)?.isDeceased)
+      spousePairs.set(personId, living ?? partnerIds[partnerIds.length - 1]!)
+    }
+  }
+
   // ── Generation assignment ──────────────────────────────────────────────────
-  //
-  // Problem with a simple BFS: married-in roots (Siti, Reza, Ayu, etc.) have
-  // no parents, so they start at gen 0. Their children get gen 1 in the BFS.
-  // Later, when we process the real grandparent (Ahmad gen 1), his children
-  // have already been visited, so their gen is never corrected to gen 2.
-  //
-  // Solution: combined iterative propagation.
-  //   - Seed: all nodes with no parents start at gen 0.
-  //   - Each round: propagate children (child ≥ parent+1) AND resolve spouses
-  //     (both at max of the pair). Only INCREASE gens, never decrease.
-  //   - Repeat until stable. Guaranteed to converge because gens only increase
-  //     and are bounded by the depth of the tree.
   const generation = new Map<string, number>()
 
   // Seed all roots at gen 0
@@ -118,7 +114,6 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
   while (dirty && safetyIter++ < nodes.length * 4) {
     dirty = false
 
-    // Child propagation: every child must be at least parent_gen + 1
     for (const [parentId, childSet] of childrenOf) {
       const parentGen = generation.get(parentId)
       if (parentGen === undefined) continue
@@ -132,7 +127,6 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
       }
     }
 
-    // Spouse resolution: both spouses must share the same (max) generation
     for (const e of edges) {
       if (e.relationshipType !== 'SPOUSE') continue
       const gA = generation.get(e.sourceId)
@@ -149,7 +143,6 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
     }
   }
 
-  // Any nodes still unassigned (completely isolated) → generation 0
   for (const n of nodes) {
     if (!generation.has(n.id)) generation.set(n.id, 0)
   }
@@ -162,7 +155,6 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
   }
 
   // ── Couple-unit builder ────────────────────────────────────────────────────
-  // A unit is [male, female] or [single]. Male always on the left.
   function buildUnits(ids: string[]): string[][] {
     const visited = new Set<string>()
     const units: string[][] = []
@@ -217,7 +209,7 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
     }
   }
 
-  // ── Build junction nodes ───────────────────────────────────────────────────
+  // ── Build parent groups ────────────────────────────────────────────────────
   const parentGroups = new Map<string, { parentIds: string[]; childIds: string[] }>()
 
   for (const [childId, pSet] of parentsOf) {
@@ -228,135 +220,151 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
     parentGroups.get(key)!.childIds.push(childId)
   }
 
-  const junctions: VirtualJunction[] = []
-  const juncIdByKey = new Map<string, string>()
-
-  for (const [key, group] of parentGroups) {
-    if (group.childIds.length === 0) continue
-
-    // Average centre-X of all parents
-    const avgCentreX =
-      group.parentIds.reduce((sum, pid) => {
-        const pos = positions.get(pid) ?? { x: 0, y: 0 }
-        return sum + pos.x + NODE_W / 2
-      }, 0) / group.parentIds.length
-
-    // Use the DEEPEST parent Y so that cross-generation parents route the
-    // junction below the lower parent's row (not the upper one).
-    const maxParentY = Math.max(
-      ...group.parentIds.map((pid) => positions.get(pid)?.y ?? 0),
-    )
-
-    const juncId = `junc_${key}`
-    junctions.push({
-      id:  juncId,
-      x:   avgCentreX - JUNCTION_SIZE / 2,
-      y:   maxParentY + NODE_H + JUNCTION_OFFSET,
-    })
-    juncIdByKey.set(key, juncId)
-  }
-
   // ── Reposition children under their parent junction ───────────────────────
   //
-  // The global generation layout above places all same-gen nodes in one flat
-  // row. This pass redistributes each parent group's children to be centered
-  // under the group's junction, pulling in each child's spouse so couples
-  // remain adjacent. Groups are processed left-to-right so that when two
-  // groups share a Y level, later groups don't overlap earlier ones.
+  // Gender rule:
+  //   Boys  → processed first; they anchor the left-to-right order.
+  //            Each boy brings his wife immediately to his right (if she exists).
+  //   Girls → only repositioned when married (placed next to their husband above).
+  //            Unmarried girls are appended after all male units in natural order.
+  //
+  // Centering: always uses the unified total-width formula (no odd/even branch).
+  // childY:    derived from the child's generation, not Math.max of positions
+  //            (avoids picking the wrong row when children span multiple gens).
   {
     const sortedGroups = [...parentGroups.entries()]
-      .map(([key, group]) => ({
-        key,
-        group,
-        junc: junctions.find((j) => j.id === `junc_${key}`)!,
-      }))
-      .filter((g) => g.junc != null && g.group.childIds.length > 0)
-      .sort((a, b) => a.junc.x - b.junc.x)
+      .map(([key, group]) => {
+        const maxParentY = Math.max(
+          ...group.parentIds.map((pid) => positions.get(pid)?.y ?? 0),
+        )
+        return { key, group, maxParentY }
+      })
+      .filter((g) => g.group.childIds.length > 0)
+      .sort((a, b) => {
+        // Primary: generation order (maxParentY ASC) so that parents are always
+        // repositioned before any of their children's groups are processed.
+        // Secondary: left-to-right by parent X so sibling groups don't overlap.
+        if (a.maxParentY !== b.maxParentY) return a.maxParentY - b.maxParentY
+        const avgX = (g: typeof a) =>
+          g.group.parentIds.reduce((s, id) => s + (positions.get(id)?.x ?? 0) + NODE_W / 2, 0) /
+          g.group.parentIds.length
+        return avgX(a) - avgX(b)
+      })
 
-    // rightEdge per Y level — prevents overlap between sibling-groups on the same row
-    const rightEdgeByY = new Map<number, number>()
+    const rightEdgeByY  = new Map<number, number>()
     const alreadyPlaced = new Set<string>()
 
-    for (const { group, junc } of sortedGroups) {
-      const children = [...group.childIds].filter((id) => !alreadyPlaced.has(id))
+    for (const { group, maxParentY } of sortedGroups) {
+      const children = [...group.childIds]
+        .filter((id) => !alreadyPlaced.has(id))
+        .sort((a, b) => {
+          // Oldest child first (ascending birth date); unknown dates go last
+          const aDate = nodeById.get(a)?.birthDate
+            ? new Date(nodeById.get(a)!.birthDate as string).getTime() : Infinity
+          const bDate = nodeById.get(b)?.birthDate
+            ? new Date(nodeById.get(b)!.birthDate as string).getTime() : Infinity
+          return aDate - bDate
+        })
       if (children.length === 0) continue
 
-      // Determine the Y for this child group (all children share the same gen)
-      const childY = Math.max(...children.map((id) => positions.get(id)?.y ?? 0))
+      // Use generation-based Y (all siblings share the same generation)
+      const firstChildGen = generation.get(children[0]!) ?? 0
+      const childY = firstChildGen * (NODE_H + GEN_GAP)
 
-      // Sort children left-to-right to maintain visual order
-      children.sort((a, b) => (positions.get(a)?.x ?? 0) - (positions.get(b)?.x ?? 0))
-
-      // Build couple-aware units: pair each child with their external spouse
       const seenInUnit = new Set<string>()
-      const units: Array<{ ids: string[]; w: number }> = []
+      // childOffset = center of the CHILD node (ids[0] for males, ids[0] for females)
+      // measured from the unit's left edge. Used for avgChildCenterOffset centering.
+      const units: Array<{ ids: string[]; w: number; childOffset: number }> = []
 
+      // Pass 1 — males anchor order.
+      //   Each male pulls his ghost spouses (deceased/secondary wives) to HIS LEFT,
+      //   then himself, then his primary wife to HIS RIGHT.
+      //   Layout: [ghost…, Male, PrimaryWife?]
       for (const cid of children) {
+        const childNode = nodeById.get(cid)
+        if (childNode?.gender !== 'MALE') continue
         if (seenInUnit.has(cid)) continue
         seenInUnit.add(cid)
 
-        const spouse = spousePairs.get(cid)
-        if (spouse && !seenInUnit.has(spouse) && !children.includes(spouse)) {
-          // External spouse — place as a couple unit (male left, female right)
-          seenInUnit.add(spouse)
-          const spouseNode = nodeById.get(spouse)
-          const childNode  = nodeById.get(cid)
-          const leftId  = spouseNode?.gender === 'MALE' && childNode?.gender !== 'MALE' ? spouse : cid
-          const rightId = leftId === cid ? spouse : cid
-          units.push({ ids: [leftId, rightId], w: NODE_W * 2 + COUPLE_GAP })
-        } else if (spouse && children.includes(spouse) && !seenInUnit.has(spouse)) {
-          // Sibling couple (incest edge case)
-          seenInUnit.add(spouse)
-          units.push({ ids: [cid, spouse], w: NODE_W * 2 + COUPLE_GAP })
-        } else {
-          units.push({ ids: [cid], w: NODE_W })
+        const primarySpouse = spousePairs.get(cid)
+
+        // Ghost spouses = all female spouses that are NOT the primary one
+        const ghosts = (spouseAllOf.get(cid) ?? [])
+          .filter((sid) =>
+            sid !== primarySpouse &&
+            nodeById.get(sid)?.gender === 'FEMALE' &&
+            !seenInUnit.has(sid),
+          )
+          .sort((a, b) => {
+            // Most recently born ghost closest to the male (inner left)
+            const aT = nodeById.get(a)?.birthDate
+              ? new Date(nodeById.get(a)!.birthDate as string).getTime() : 0
+            const bT = nodeById.get(b)?.birthDate
+              ? new Date(nodeById.get(b)!.birthDate as string).getTime() : 0
+            return bT - aT
+          })
+        ghosts.forEach((sid) => seenInUnit.add(sid))
+
+        const unitIds: string[] = [...ghosts, cid]
+        // Child (male) center from unit left = ghosts * (NODE_W + COUPLE_GAP) + NODE_W/2
+        const childOffset = ghosts.length * (NODE_W + COUPLE_GAP) + NODE_W / 2
+
+        const primaryNode = primarySpouse ? nodeById.get(primarySpouse) : undefined
+        if (primarySpouse && primaryNode?.gender === 'FEMALE' && !seenInUnit.has(primarySpouse)) {
+          seenInUnit.add(primarySpouse)
+          unitIds.push(primarySpouse)
         }
+
+        const w = (unitIds.length - 1) * (NODE_W + COUPLE_GAP) + NODE_W
+        units.push({ ids: unitIds, w, childOffset })
       }
 
-      const juncCenterX = junc.x + JUNCTION_SIZE / 2
-      const n = units.length
-
-      // Odd number of units: align the middle unit's centre over the junction.
-      // Even number of units: centre the whole group over the junction.
-      let startX: number
-      if (n % 2 === 1) {
-        const midIdx = Math.floor(n / 2)
-        let widthBefore = 0
-        for (let i = 0; i < midIdx; i++) widthBefore += units[i]!.w + UNIT_GAP
-        startX = juncCenterX - units[midIdx]!.w / 2 - widthBefore
-      } else {
-        const totalW = units.reduce((s, u) => s + u.w, 0) + UNIT_GAP * Math.max(n - 1, 0)
-        startX = juncCenterX - totalW / 2
+      // Pass 2 — remaining children (females, unknown gender) appended in age order
+      for (const cid of children) {
+        if (seenInUnit.has(cid)) continue
+        seenInUnit.add(cid)
+        units.push({ ids: [cid], w: NODE_W, childOffset: NODE_W / 2 })
       }
 
-      // Enforce right-edge constraint so groups don't overlap on the same row
+      // Junction center X = average of parent card centers
+      const juncCenterX =
+        group.parentIds.reduce((s, pid) => s + (positions.get(pid)?.x ?? 0) + NODE_W / 2, 0) /
+        group.parentIds.length
+
+      // Center the children (the male anchor of each unit) around juncCenterX.
+      // childOffset gives each unit's male center distance from the unit's left edge.
+      let childCenterOffsetSum = 0
+      let unitRunOffset = 0
+      for (const u of units) {
+        childCenterOffsetSum += unitRunOffset + u.childOffset
+        unitRunOffset += u.w + UNIT_GAP
+      }
+      const avgChildCenterOffset = childCenterOffsetSum / units.length
+      let   startX = juncCenterX - avgChildCenterOffset
+
+      // Prevent overlap with groups already placed on this row
       const prevRight = rightEdgeByY.get(childY) ?? -Infinity
       if (startX < prevRight + UNIT_GAP) startX = prevRight + UNIT_GAP
 
       for (const unit of units) {
-        const [a, b] = unit.ids
-        if (b !== undefined) {
-          positions.set(a!, { x: startX, y: childY })
-          positions.set(b,  { x: startX + NODE_W + COUPLE_GAP, y: childY })
-        } else {
-          positions.set(a!, { x: startX, y: childY })
+        for (let k = 0; k < unit.ids.length; k++) {
+          positions.set(unit.ids[k]!, {
+            x: startX + k * (NODE_W + COUPLE_GAP),
+            y: childY,
+          })
+          alreadyPlaced.add(unit.ids[k]!)
         }
-        unit.ids.forEach((id) => alreadyPlaced.add(id))
         startX += unit.w + UNIT_GAP
       }
 
       rightEdgeByY.set(childY, startX - UNIT_GAP)
 
-      // Recentre the junction over its repositioned children
-      const childXs = group.childIds.map((id) => (positions.get(id)?.x ?? 0) + NODE_W / 2)
-      const newJuncCX = (Math.min(...childXs) + Math.max(...childXs)) / 2
-      junc.x = newJuncCX - JUNCTION_SIZE / 2
+      // Recentre the junction X over the repositioned children for the bracket bar
+      void maxParentY  // used only for bracketJunctionY below
     }
   }
 
   // ── Final overlap resolution ───────────────────────────────────────────────
-  // After child repositioning, nodes on the same row might still overlap.
-  // Sort each Y-level by X and enforce a minimum gap between every adjacent pair.
   {
     const byY = new Map<number, string[]>()
     for (const [id, pos] of positions) {
@@ -379,15 +387,39 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
   }
 
   // ── Build edges ────────────────────────────────────────────────────────────
+  // bracketEdges FIRST so they render behind; relationshipEdges LAST so they
+  // render on top (and their white-bridge path covers bracket lines they cross).
   const flowEdges: FlowEdgeMeta[] = []
 
+  // PARENT_CHILD — one bracketEdge per parent group, rendered by BracketEdgeComponent.
+  // source/target are just valid node IDs so React Flow renders the edge;
+  // the component ignores handle positions and reads useNodes() directly.
+  for (const [key, group] of parentGroups) {
+    if (group.childIds.length === 0) continue
+    const maxParentY = Math.max(
+      ...group.parentIds.map((pid) => positions.get(pid)?.y ?? 0),
+    )
+    flowEdges.push({
+      id:               `bracket_${key}`,
+      source:           group.parentIds[0]!,
+      target:           group.childIds[0]!,
+      sourceHandle:     'bottom',
+      targetHandle:     'top',
+      relationshipType: 'PARENT_CHILD',
+      edgeType:         'bracketEdge',
+      bracketParentIds: group.parentIds,
+      bracketChildIds:  group.childIds,
+      bracketJunctionY: maxParentY + NODE_H + JUNCTION_OFFSET +
+        (group.childIds.length > 1 ? 30 : 0),
+    })
+  }
+
+  // SPOUSE / SIBLING — relationship edges (render on top with white bridge)
   for (const e of edges) {
     if (e.relationshipType === 'PARENT_CHILD') continue
-
     const srcPos    = positions.get(e.sourceId)
     const tgtPos    = positions.get(e.targetId)
     const srcIsLeft = (srcPos?.x ?? 0) < (tgtPos?.x ?? 0)
-
     flowEdges.push({
       id:               e.id,
       source:           e.sourceId,
@@ -399,35 +431,5 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
     })
   }
 
-  // Junction routing edges (replace all PARENT_CHILD edges)
-  for (const [key, group] of parentGroups) {
-    const juncId = juncIdByKey.get(key)
-    if (!juncId) continue
-
-    for (const pid of group.parentIds) {
-      flowEdges.push({
-        id:               `${juncId}_p_${pid}`,
-        source:           pid,
-        target:           juncId,
-        sourceHandle:     'bottom',
-        targetHandle:     'top',
-        relationshipType: 'PARENT_CHILD',
-        edgeType:         'junctionEdge',
-      })
-    }
-
-    for (const cid of group.childIds) {
-      flowEdges.push({
-        id:               `${juncId}_c_${cid}`,
-        source:           juncId,
-        target:           cid,
-        sourceHandle:     'bottom',
-        targetHandle:     'top',
-        relationshipType: 'PARENT_CHILD',
-        edgeType:         'junctionEdge',
-      })
-    }
-  }
-
-  return { positions, junctions, edges: flowEdges }
+  return { positions, edges: flowEdges }
 }

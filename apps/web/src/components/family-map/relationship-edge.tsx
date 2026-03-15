@@ -2,15 +2,15 @@
 
 import { memo, type FC, type ReactElement } from 'react'
 import {
-  BaseEdge,
   getBezierPath,
   getSmoothStepPath,
   type EdgeProps,
 } from '@xyflow/react'
 import { COLOR } from '@/lib/design-tokens'
 
-interface RelationshipData {
+interface RelationshipData extends Record<string, unknown> {
   relationshipType: 'PARENT_CHILD' | 'SPOUSE' | 'SIBLING'
+  highlighted?: boolean
 }
 
 export const RelationshipEdgeComponent: FC<EdgeProps & { data: RelationshipData }> = memo(
@@ -25,6 +25,7 @@ export const RelationshipEdgeComponent: FC<EdgeProps & { data: RelationshipData 
     selected,
   }): ReactElement {
     const type = data?.relationshipType ?? 'PARENT_CHILD'
+    const highlighted = data?.highlighted ?? false
 
     let edgePath: string
 
@@ -55,20 +56,32 @@ export const RelationshipEdgeComponent: FC<EdgeProps & { data: RelationshipData 
       SIBLING:      COLOR.EDGE_SIBLING,
     }
 
-    const color = colors[type] ?? COLOR.EDGE_PARENT_CHILD
-    const strokeWidth = selected ? 2.5 : type === 'SPOUSE' ? 2 : 1.5
-    const strokeDash = type === 'SPOUSE' ? '6 3' : undefined
+    const isActive    = selected || highlighted
+    const color       = isActive ? COLOR.EDGE_HIGHLIGHT : (colors[type] ?? COLOR.EDGE_PARENT_CHILD)
+    const strokeWidth = isActive ? 2.5 : type === 'SPOUSE' ? 2 : 1.5
+    const strokeDash  = type === 'SPOUSE' ? '6 3' : undefined
 
     return (
-      <BaseEdge
-        path={edgePath}
-        style={{
-          stroke: color,
-          strokeWidth,
-          strokeDasharray: strokeDash,
-          opacity: selected ? 1 : 0.75,
-        }}
-      />
+      <>
+        {/* White bridge — visually "erases" bracket lines where they cross */}
+        <path
+          d={edgePath}
+          fill="none"
+          stroke="#f5f0e8"
+          strokeWidth={strokeWidth + 5}
+          strokeDasharray={undefined}
+          strokeLinecap="round"
+        />
+        <path
+          d={edgePath}
+          fill="none"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeDasharray={strokeDash}
+          strokeLinecap="round"
+          opacity={isActive ? 1 : 0.75}
+        />
+      </>
     )
   },
 )

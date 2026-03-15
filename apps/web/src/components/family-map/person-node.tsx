@@ -20,21 +20,21 @@ const handleCls = '!opacity-0 !w-2 !h-2 !border-0 !bg-transparent'
 // Alive Female → rose pink.
 // Unknown      → neutral white.
 function cardColorCls(gender: string | null, isDeceased: boolean): string {
-  if (isDeceased) return 'bg-slate-100 border-slate-300'
+  if (isDeceased) return 'bg-white border-slate-400'
   if (gender === 'MALE')   return 'bg-sky-50 border-sky-200'
   if (gender === 'FEMALE') return 'bg-rose-50 border-rose-200'
   return 'bg-white border-slate-200'
 }
 
 function hoverCls(gender: string | null, isDeceased: boolean): string {
-  if (isDeceased)          return 'hover:border-slate-400 hover:shadow-md'
+  if (isDeceased)          return 'hover:border-slate-500 hover:shadow-md'
   if (gender === 'MALE')   return 'hover:border-sky-400 hover:shadow-md'
   if (gender === 'FEMALE') return 'hover:border-rose-400 hover:shadow-md'
   return 'hover:border-brand-300 hover:shadow-md'
 }
 
 function selectedCls(gender: string | null, isDeceased: boolean): string {
-  if (isDeceased)          return 'border-slate-400 shadow-slate-200 shadow-md scale-105'
+  if (isDeceased)          return 'border-slate-500 shadow-slate-200 shadow-md scale-105'
   if (gender === 'MALE')   return 'border-sky-400 shadow-sky-200 shadow-md scale-105'
   if (gender === 'FEMALE') return 'border-rose-400 shadow-rose-200 shadow-md scale-105'
   return 'border-brand-400 shadow-brand-200 shadow-md scale-105'
@@ -80,7 +80,7 @@ export const PersonNodeComponent = memo(function PersonNodeComponent({
         <div className="text-center w-full overflow-hidden">
           <div className="flex items-center justify-center gap-0.5">
             {node.isDeceased && node.gender && (
-              <span className={cn(FONT.NODE_BADGE, 'text-slate-400 leading-none')}>
+              <span className={cn(FONT.NODE_BADGE, 'text-slate-500 leading-none')}>
                 {node.gender === 'MALE' ? '♂' : '♀'}
               </span>
             )}
