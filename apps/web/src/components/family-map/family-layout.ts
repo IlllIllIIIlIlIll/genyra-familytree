@@ -271,58 +271,91 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
       const childY = firstChildGen * (NODE_H + GEN_GAP)
 
       const seenInUnit = new Set<string>()
-      // childOffset = center of the CHILD node (ids[0] for males, ids[0] for females)
-      // measured from the unit's left edge. Used for avgChildCenterOffset centering.
+      // childOffset = center of the couple (midpoint of the two spouses) measured
+      // from the unit's left edge. Using the couple midpoint (not just the blood
+      // descendant's center) ensures the grandparent is visually centered over the
+      // evenly-spaced couple units rather than the blood-descendant positions alone.
       const units: Array<{ ids: string[]; w: number; childOffset: number }> = []
 
-      // Pass 1 — males anchor order.
-      //   Each male pulls his ghost spouses (deceased/secondary wives) to HIS LEFT,
-      //   then himself, then his primary wife to HIS RIGHT.
-      //   Layout: [ghost…, Male, PrimaryWife?]
+      // Single pass in birth order — males and females handled together so the
+      // child ordering on screen matches biological birth order left-to-right.
+      //
+      // MALE blood descendant  → unit: [ghost_wives…, Male, PrimaryWife?]
+      //   couple midpoint from unit left = ((2g+1)*(NODE_W+COUPLE_GAP) + NODE_W) / 2
+      //   where g = number of ghost wives.
+      //
+      // FEMALE blood descendant → unit: [Husband, Female]  (husband on the LEFT
+      //   per the "woman always to the right of the man" rule; Husband is fetched
+      //   from Phase A positions so he moves into place here rather than staying
+      //   stranded at a Phase A X coordinate far from his wife).
+      //   couple midpoint from unit left = (NODE_W*2 + COUPLE_GAP) / 2  = 132
+      //
+      // Singles (no spouse) → unit: [Person], childOffset = NODE_W/2 = 60
       for (const cid of children) {
-        const childNode = nodeById.get(cid)
-        if (childNode?.gender !== 'MALE') continue
         if (seenInUnit.has(cid)) continue
         seenInUnit.add(cid)
 
+        const childNode    = nodeById.get(cid)
         const primarySpouse = spousePairs.get(cid)
+        const primaryNode  = primarySpouse ? nodeById.get(primarySpouse) : undefined
 
-        // Ghost spouses = all female spouses that are NOT the primary one
-        const ghosts = (spouseAllOf.get(cid) ?? [])
-          .filter((sid) =>
-            sid !== primarySpouse &&
-            nodeById.get(sid)?.gender === 'FEMALE' &&
-            !seenInUnit.has(sid),
-          )
-          .sort((a, b) => {
-            // Most recently born ghost closest to the male (inner left)
-            const aT = nodeById.get(a)?.birthDate
-              ? new Date(nodeById.get(a)!.birthDate as string).getTime() : 0
-            const bT = nodeById.get(b)?.birthDate
-              ? new Date(nodeById.get(b)!.birthDate as string).getTime() : 0
-            return bT - aT
-          })
-        ghosts.forEach((sid) => seenInUnit.add(sid))
+        if (childNode?.gender === 'MALE') {
+          // Ghost spouses = female non-primary spouses placed to the LEFT of the male
+          const ghosts = (spouseAllOf.get(cid) ?? [])
+            .filter((sid) =>
+              sid !== primarySpouse &&
+              nodeById.get(sid)?.gender === 'FEMALE' &&
+              !seenInUnit.has(sid),
+            )
+            .sort((a, b) => {
+              // Most recently born ghost closest to the male (inner left)
+              const aT = nodeById.get(a)?.birthDate
+                ? new Date(nodeById.get(a)!.birthDate as string).getTime() : 0
+              const bT = nodeById.get(b)?.birthDate
+                ? new Date(nodeById.get(b)!.birthDate as string).getTime() : 0
+              return bT - aT
+            })
+          ghosts.forEach((sid) => seenInUnit.add(sid))
 
-        const unitIds: string[] = [...ghosts, cid]
-        // Child (male) center from unit left = ghosts * (NODE_W + COUPLE_GAP) + NODE_W/2
-        const childOffset = ghosts.length * (NODE_W + COUPLE_GAP) + NODE_W / 2
+          const unitIds: string[] = [...ghosts, cid]
+          const g = ghosts.length  // number of ghosts to the left of the male
 
-        const primaryNode = primarySpouse ? nodeById.get(primarySpouse) : undefined
-        if (primarySpouse && primaryNode?.gender === 'FEMALE' && !seenInUnit.has(primarySpouse)) {
-          seenInUnit.add(primarySpouse)
-          unitIds.push(primarySpouse)
+          const hasWife =
+            primarySpouse &&
+            primaryNode?.gender === 'FEMALE' &&
+            !seenInUnit.has(primarySpouse)
+          if (hasWife) {
+            seenInUnit.add(primarySpouse!)
+            unitIds.push(primarySpouse!)
+          }
+
+          const w = (unitIds.length - 1) * (NODE_W + COUPLE_GAP) + NODE_W
+          // Couple midpoint: center between [male, wife]; if no wife, just male center
+          const childOffset = hasWife
+            ? ((2 * g + 1) * (NODE_W + COUPLE_GAP) + NODE_W) / 2
+            : g * (NODE_W + COUPLE_GAP) + NODE_W / 2
+          units.push({ ids: unitIds, w, childOffset })
+
+        } else if (childNode?.gender === 'FEMALE') {
+          // Female blood descendant: husband goes to her LEFT
+          const hasHusband =
+            primarySpouse &&
+            primaryNode?.gender === 'MALE' &&
+            !seenInUnit.has(primarySpouse)
+          if (hasHusband) {
+            seenInUnit.add(primarySpouse!)
+            units.push({
+              ids:         [primarySpouse!, cid],
+              w:           NODE_W * 2 + COUPLE_GAP,
+              childOffset: (NODE_W * 2 + COUPLE_GAP) / 2, // couple midpoint = 132
+            })
+          } else {
+            units.push({ ids: [cid], w: NODE_W, childOffset: NODE_W / 2 })
+          }
+
+        } else {
+          units.push({ ids: [cid], w: NODE_W, childOffset: NODE_W / 2 })
         }
-
-        const w = (unitIds.length - 1) * (NODE_W + COUPLE_GAP) + NODE_W
-        units.push({ ids: unitIds, w, childOffset })
-      }
-
-      // Pass 2 — remaining children (females, unknown gender) appended in age order
-      for (const cid of children) {
-        if (seenInUnit.has(cid)) continue
-        seenInUnit.add(cid)
-        units.push({ ids: [cid], w: NODE_W, childOffset: NODE_W / 2 })
       }
 
       // Junction center X = average of parent card centers
@@ -411,6 +444,74 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
             const pos = positions.get(id)!
             positions.set(id, { ...pos, x: pos.x + delta })
           }
+        }
+      }
+    }
+  }
+
+  // ── Phase C — re-centre parents over their actual child positions ──────────
+  //
+  // Phase B centres children under the parents' Phase-A junction, but the final
+  // overlap resolution may shift child groups sideways. Phase C moves each parent
+  // couple so their midpoint aligns with the average midpoint of their children's
+  // couple units.  We iterate from the DEEPEST generation upward so that moving
+  // gen-1 parents doesn't misplace gen-2 children that have already been fixed.
+  {
+    const genOrder = [...parentGroups.entries()]
+      .map(([key, group]) => {
+        const maxParentY = Math.max(
+          ...group.parentIds.map((pid) => positions.get(pid)?.y ?? 0),
+        )
+        return { key, group, maxParentY }
+      })
+      .filter((g) => g.group.childIds.length > 0)
+      .sort((a, b) => b.maxParentY - a.maxParentY) // deepest first
+
+    for (const { group } of genOrder) {
+      // Compute the midpoint of all children's couple units
+      // (couple midpoint = average of left-node center and right-node center within spouseAllOf)
+      const childMidpoints = group.childIds.map((cid) => {
+        const childPos = positions.get(cid)
+        if (!childPos) return null
+        // Find the child's spouse on the same row (if any)
+        const spouse = (spouseAllOf.get(cid) ?? []).find((sid) => {
+          const sp = positions.get(sid)
+          return sp && Math.abs(sp.y - childPos.y) < 1
+        })
+        if (spouse) {
+          const spousePos = positions.get(spouse)!
+          return ((childPos.x + NODE_W / 2) + (spousePos.x + NODE_W / 2)) / 2
+        }
+        return childPos.x + NODE_W / 2
+      }).filter((v): v is number => v !== null)
+
+      if (childMidpoints.length === 0) continue
+      const avgChildMidpoint = childMidpoints.reduce((a, b) => a + b, 0) / childMidpoints.length
+
+      // Current parent couple midpoint
+      const parentCenters = group.parentIds.map(
+        (pid) => (positions.get(pid)?.x ?? 0) + NODE_W / 2,
+      )
+      const avgParentCenter = parentCenters.reduce((a, b) => a + b, 0) / parentCenters.length
+
+      const delta = avgChildMidpoint - avgParentCenter
+      if (Math.abs(delta) < 0.5) continue
+
+      // Move each parent (and their spouses on the same row) by delta
+      const moved = new Set<string>()
+      for (const pid of group.parentIds) {
+        if (moved.has(pid)) continue
+        const pPos = positions.get(pid)
+        if (!pPos) continue
+        positions.set(pid, { ...pPos, x: pPos.x + delta })
+        moved.add(pid)
+        // Move spouse too so the couple stays together
+        for (const sid of (spouseAllOf.get(pid) ?? [])) {
+          if (moved.has(sid)) continue
+          const sPos = positions.get(sid)
+          if (!sPos || Math.abs(sPos.y - pPos.y) > 1) continue
+          positions.set(sid, { ...sPos, x: sPos.x + delta })
+          moved.add(sid)
         }
       }
     }
