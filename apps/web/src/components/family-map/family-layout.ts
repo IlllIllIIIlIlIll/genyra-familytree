@@ -251,7 +251,6 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
         return avgX(a) - avgX(b)
       })
 
-    const rightEdgeByY  = new Map<number, number>()
     const alreadyPlaced = new Set<string>()
 
     for (const { group, maxParentY } of sortedGroups) {
@@ -340,11 +339,11 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
         unitRunOffset += u.w + UNIT_GAP
       }
       const avgChildCenterOffset = childCenterOffsetSum / units.length
-      let   startX = juncCenterX - avgChildCenterOffset
-
-      // Prevent overlap with groups already placed on this row
-      const prevRight = rightEdgeByY.get(childY) ?? -Infinity
-      if (startX < prevRight + UNIT_GAP) startX = prevRight + UNIT_GAP
+      // Center exactly under the parents' junction — no Phase B overlap check.
+      // Each family group lands at its natural center; the final overlap
+      // resolution pass below handles any resulting collisions while keeping
+      // couple units intact.
+      let startX = juncCenterX - avgChildCenterOffset
 
       for (const unit of units) {
         for (let k = 0; k < unit.ids.length; k++) {
@@ -357,14 +356,16 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
         startX += unit.w + UNIT_GAP
       }
 
-      rightEdgeByY.set(childY, startX - UNIT_GAP)
-
       // Recentre the junction X over the repositioned children for the bracket bar
       void maxParentY  // used only for bracketJunctionY below
     }
   }
 
-  // ── Final overlap resolution ───────────────────────────────────────────────
+  // ── Final overlap resolution — couple-unit aware ───────────────────────────
+  //
+  // Nodes on the same row are grouped into "units" (a person + all their
+  // spouses on the same row).  Overlapping units are pushed right as a whole
+  // so married couples always stay together at COUPLE_GAP spacing.
   {
     const byY = new Map<number, string[]>()
     for (const [id, pos] of positions) {
@@ -372,16 +373,45 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
       if (!byY.has(yKey)) byY.set(yKey, [])
       byY.get(yKey)!.push(id)
     }
-    for (const ids of byY.values()) {
-      if (ids.length <= 1) continue
-      ids.sort((a, b) => (positions.get(a)?.x ?? 0) - (positions.get(b)?.x ?? 0))
-      for (let i = 1; i < ids.length; i++) {
-        const prev = positions.get(ids[i - 1]!)!
-        const curr = positions.get(ids[i]!)!
-        const isCouple = spousePairs.get(ids[i - 1]!) === ids[i]
-        const minGap   = isCouple ? COUPLE_GAP : Math.max(UNIT_GAP / 2, 20)
-        const minX     = prev.x + NODE_W + minGap
-        if (curr.x < minX) positions.set(ids[i]!, { ...curr, x: minX })
+
+    for (const yIds of byY.values()) {
+      if (yIds.length <= 1) continue
+
+      // Build units: each person + all of their spouses on this row
+      const assigned = new Set<string>()
+      const units: string[][] = []
+
+      yIds.sort((a, b) => (positions.get(a)?.x ?? 0) - (positions.get(b)?.x ?? 0))
+
+      for (const id of yIds) {
+        if (assigned.has(id)) continue
+        assigned.add(id)
+        const unit: string[] = [id]
+        for (const sid of (spouseAllOf.get(id) ?? [])) {
+          if (!assigned.has(sid) && yIds.includes(sid)) {
+            assigned.add(sid)
+            unit.push(sid)
+          }
+        }
+        unit.sort((a, b) => (positions.get(a)?.x ?? 0) - (positions.get(b)?.x ?? 0))
+        units.push(unit)
+      }
+
+      units.sort((a, b) => (positions.get(a[0]!)?.x ?? 0) - (positions.get(b[0]!)?.x ?? 0))
+
+      // Push overlapping units right as a whole
+      for (let i = 1; i < units.length; i++) {
+        const prev = units[i - 1]!
+        const curr = units[i]!
+        const prevRight = Math.max(...prev.map((id) => (positions.get(id)?.x ?? 0) + NODE_W))
+        const currLeft  = Math.min(...curr.map((id)  =>  positions.get(id)?.x ?? 0))
+        if (currLeft < prevRight + UNIT_GAP) {
+          const delta = prevRight + UNIT_GAP - currLeft
+          for (const id of curr) {
+            const pos = positions.get(id)!
+            positions.set(id, { ...pos, x: pos.x + delta })
+          }
+        }
       }
     }
   }
@@ -409,8 +439,7 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
       edgeType:         'bracketEdge',
       bracketParentIds: group.parentIds,
       bracketChildIds:  group.childIds,
-      bracketJunctionY: maxParentY + NODE_H + JUNCTION_OFFSET +
-        (group.childIds.length > 1 ? 30 : 0),
+      bracketJunctionY: maxParentY + NODE_H + JUNCTION_OFFSET,
     })
   }
 

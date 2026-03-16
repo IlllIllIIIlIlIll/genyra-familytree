@@ -4,26 +4,34 @@ import { memo, useMemo, type FC, type ReactElement } from 'react'
 import { useNodes, type EdgeProps } from '@xyflow/react'
 import { CANVAS, COLOR } from '@/lib/design-tokens'
 
-const { NODE_W, NODE_H } = CANVAS
+const { NODE_W, NODE_H, JUNCTION_OFFSET } = CANVAS
 
 export interface BracketEdgeData extends Record<string, unknown> {
-  parentIds:          string[]
-  childIds:           string[]
-  junctionY:          number
-  /** True when the selected node is a PARENT in this bracket (highlight whole bracket) */
-  highlighted?:       boolean
-  /** Set to the selected child's ID to highlight only that child's stem */
+  parentIds:           string[]
+  childIds:            string[]
+  junctionY:           number
+  /** True when the selected node is a PARENT in this bracket */
+  highlighted?:        boolean
+  /** Set to the selected child's ID to highlight only that child's path */
   highlightedChildId?: string
 }
 
 /**
- * Draws a family H-bar bracket as SVG.
+ * Two-level T-junction bracket:
  *
- * Structure:
- *   - One <path> for parent stems + horizontal bar  (highlighted if `highlighted`)
- *   - One <path> per child stem                      (highlighted if that child is selected)
+ *   Parent1   Parent2
+ *      |          |          ← parent stems
+ *      +----+-----+          ← parent bar  (parentBarY = junctionY)
+ *           |                ← trunk
+ *      +----+-----+          ← child bar   (childBarY  = childTop − JUNCTION_OFFSET)
+ *      |          |          ← child L-paths (bar segment + stem combined)
+ *   Child1    Child2
  *
- * This lets clicking a child node highlight only its own stem, not its siblings'.
+ * Highlight rules:
+ *   • Parent selected  → everything highlighted
+ *   • Child C selected → parent stems + bar + trunk highlighted;
+ *                        only C's L-path highlighted; siblings stay dim
+ *   • Nothing selected → everything dim
  */
 export const BracketEdgeComponent: FC<EdgeProps & { data: BracketEdgeData }> = memo(
   function BracketEdgeComponent({ data }): ReactElement {
@@ -48,58 +56,94 @@ export const BracketEdgeComponent: FC<EdgeProps & { data: BracketEdgeData }> = m
     const parentXs = parentPos.map((p) => p!.x + NODE_W / 2)
     const childXs  = childPos.map((p)  => p!.x + NODE_W / 2)
 
-    // Bar spans parents AND children so no child stem is ever left "floating"
-    const allXs   = [...parentXs, ...childXs]
-    const barMinX = Math.min(...allXs)
-    const barMaxX = Math.max(...allXs)
+    // ── Geometry ──────────────────────────────────────────────────────────────
 
-    // When a child is selected, the full path parent→junction→child lights up.
-    // "anyChildHit" makes parent stems + bar highlight alongside the child stem.
-    const anyChildHit = highlighted || (!!highlightedChildId && childIds.includes(highlightedChildId))
+    const parentBarY = jY                                      // just below parents
+    const childTopY  = Math.min(...childPos.map((p) => p!.y))
+    const childBarY  = childTopY - JUNCTION_OFFSET             // just above children
 
-    const baseSegs: string[] = []
-    for (let i = 0; i < parentIds.length; i++) {
+    const parentBarMinX = Math.min(...parentXs)
+    const parentBarMaxX = Math.max(...parentXs)
+    // Trunk hangs from the center of the parent bar (or the single parent X)
+    const trunkX = parentXs.length === 1
+      ? parentXs[0]!
+      : (parentBarMinX + parentBarMaxX) / 2
+
+    // ── Highlight logic ───────────────────────────────────────────────────────
+
+    // Base paths (stems + bar + trunk) light up when any child OR the parent is selected
+    const baseHit = highlighted || (!!highlightedChildId && childIds.includes(highlightedChildId))
+    const baseStroke  = baseHit ? COLOR.EDGE_HIGHLIGHT : COLOR.EDGE_JUNCTION
+    const baseWidth   = baseHit ? 2.5 : 1.5
+    const baseOpacity = baseHit ? 1   : 0.6
+
+    // ── Parent stems ──────────────────────────────────────────────────────────
+    const parentStemD = parentIds.map((_, i) => {
       const px = parentXs[i]!
       const py = parentPos[i]!.y + NODE_H
-      baseSegs.push(`M ${px},${py} L ${px},${jY}`)
-    }
-    if (barMinX < barMaxX) baseSegs.push(`M ${barMinX},${jY} L ${barMaxX},${jY}`)
+      return `M ${px},${py} L ${px},${parentBarY}`
+    }).join(' ')
 
-    const baseStroke  = anyChildHit ? COLOR.EDGE_HIGHLIGHT : COLOR.EDGE_JUNCTION
-    const baseWidth   = anyChildHit ? 2.5 : 1.5
-    const baseOpacity = anyChildHit ? 1   : 0.6
+    // ── Parent bar (only when 2 parents at different X) ───────────────────────
+    const parentBarD = parentBarMinX < parentBarMaxX
+      ? `M ${parentBarMinX},${parentBarY} L ${parentBarMaxX},${parentBarY}`
+      : ''
 
-    // ── Per-child stems (individually highlightable) ───────────────────────────
-    const childSegs = childIds.map((cid, i) => {
+    // ── Trunk ─────────────────────────────────────────────────────────────────
+    const trunkD = `M ${trunkX},${parentBarY} L ${trunkX},${childBarY}`
+
+    // ── Per-child L-paths (child bar segment + child stem) ────────────────────
+    //   Each path: trunk → child X (horizontally) → child top (vertically)
+    const childPaths = childIds.map((cid, i) => {
       const cx    = childXs[i]!
       const cy    = childPos[i]!.y
       const isHit = highlighted || cid === highlightedChildId
-      return {
-        d:       `M ${cx},${jY} L ${cx},${cy}`,
-        stroke:  isHit ? COLOR.EDGE_HIGHLIGHT : COLOR.EDGE_JUNCTION,
-        width:   isHit ? 2.5 : 1.5,
-        opacity: isHit ? 1   : 0.6,
-      }
+      const d = Math.abs(cx - trunkX) < 1
+        ? `M ${cx},${childBarY} L ${cx},${cy}`
+        : `M ${trunkX},${childBarY} L ${cx},${childBarY} L ${cx},${cy}`
+      return { d, isHit }
     })
 
     return (
       <>
+        {/* Parent stems */}
         <path
-          d={baseSegs.join(' ')}
+          d={parentStemD}
           fill="none"
           stroke={baseStroke}
           strokeWidth={baseWidth}
           opacity={baseOpacity}
           strokeLinecap="round"
         />
-        {childSegs.map((seg, i) => (
+        {/* Parent bar */}
+        {parentBarD && (
+          <path
+            d={parentBarD}
+            fill="none"
+            stroke={baseStroke}
+            strokeWidth={baseWidth}
+            opacity={baseOpacity}
+            strokeLinecap="round"
+          />
+        )}
+        {/* Trunk */}
+        <path
+          d={trunkD}
+          fill="none"
+          stroke={baseStroke}
+          strokeWidth={baseWidth}
+          opacity={baseOpacity}
+          strokeLinecap="round"
+        />
+        {/* Per-child L-paths */}
+        {childPaths.map((cp, i) => (
           <path
             key={i}
-            d={seg.d}
+            d={cp.d}
             fill="none"
-            stroke={seg.stroke}
-            strokeWidth={seg.width}
-            opacity={seg.opacity}
+            stroke={cp.isHit ? COLOR.EDGE_HIGHLIGHT : COLOR.EDGE_JUNCTION}
+            strokeWidth={cp.isHit ? 2.5 : 1.5}
+            opacity={cp.isHit ? 1   : 0.6}
             strokeLinecap="round"
           />
         ))}
