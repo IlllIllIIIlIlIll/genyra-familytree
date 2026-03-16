@@ -10,6 +10,12 @@ export interface BracketEdgeData extends Record<string, unknown> {
   parentIds:           string[]
   childIds:            string[]
   junctionY:           number
+  /**
+   * Per-parent x-offset for the stem exit point (px).
+   * Set for remarried parents so each marriage's child line exits from a
+   * slightly different position on the card bottom (left vs right of centre).
+   */
+  parentStemOffsets?:  Record<string, number>
   /** True when the selected node is a PARENT in this bracket */
   highlighted?:        boolean
   /** Set to the selected child's ID to highlight only that child's path */
@@ -43,10 +49,11 @@ export const BracketEdgeComponent: FC<EdgeProps & { data: BracketEdgeData }> = m
       return m
     }, [nodes])
 
-    const parentIds        = data?.parentIds        ?? []
-    const childIds         = data?.childIds         ?? []
-    const jY               = data?.junctionY        ?? 0
-    const highlighted      = data?.highlighted      ?? false
+    const parentIds          = data?.parentIds          ?? []
+    const childIds           = data?.childIds           ?? []
+    const jY                 = data?.junctionY          ?? 0
+    const parentStemOffsets  = data?.parentStemOffsets  as Record<string, number> | undefined
+    const highlighted        = data?.highlighted        ?? false
     const highlightedChildId = data?.highlightedChildId as string | undefined
 
     const parentPos = parentIds.map((id) => posById.get(id))
@@ -56,17 +63,24 @@ export const BracketEdgeComponent: FC<EdgeProps & { data: BracketEdgeData }> = m
     const parentXs = parentPos.map((p) => p!.x + NODE_W / 2)
     const childXs  = childPos.map((p)  => p!.x + NODE_W / 2)
 
+    // Apply per-parent stem offsets (remarried parents get distinct exit points)
+    const parentXsOffset = parentIds.map((id, i) =>
+      parentXs[i]! + (parentStemOffsets?.[id] ?? 0),
+    )
+
     // ── Geometry ──────────────────────────────────────────────────────────────
 
     const parentBarY = jY                                      // just below parents
     const childTopY  = Math.min(...childPos.map((p) => p!.y))
     const childBarY  = childTopY - JUNCTION_OFFSET             // just above children
 
-    const parentBarMinX = Math.min(...parentXs)
-    const parentBarMaxX = Math.max(...parentXs)
+    // Bar and trunk use the offset X values so the bar endpoint + trunk root
+    // align with the actual stem exit point on each card.
+    const parentBarMinX = Math.min(...parentXsOffset)
+    const parentBarMaxX = Math.max(...parentXsOffset)
     // Trunk hangs from the center of the parent bar (or the single parent X)
-    const trunkX = parentXs.length === 1
-      ? parentXs[0]!
+    const trunkX = parentXsOffset.length === 1
+      ? parentXsOffset[0]!
       : (parentBarMinX + parentBarMaxX) / 2
 
     // ── Highlight logic ───────────────────────────────────────────────────────
@@ -79,7 +93,7 @@ export const BracketEdgeComponent: FC<EdgeProps & { data: BracketEdgeData }> = m
 
     // ── Parent stems ──────────────────────────────────────────────────────────
     const parentStemD = parentIds.map((_, i) => {
-      const px = parentXs[i]!
+      const px = parentXsOffset[i]!   // offset point on card bottom
       const py = parentPos[i]!.y + NODE_H
       return `M ${px},${py} L ${px},${parentBarY}`
     }).join(' ')

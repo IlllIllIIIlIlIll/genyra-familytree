@@ -27,7 +27,7 @@ export const MAX_CHARS = {
   GROUP_NAME:      100,
   NOTES:           500,
   // Display truncation (canvas / UI)
-  NODE_NAME:        18,   // chars shown on card before ellipsis
+  NODE_NAME:        12,   // chars shown on card before ellipsis
   NODE_SURNAME:     14,
   BIO_PREVIEW:     180,   // chars shown in profile card slide-up
 } as const

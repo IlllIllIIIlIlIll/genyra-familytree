@@ -62,6 +62,13 @@ export interface FlowEdgeMeta {
   bracketParentIds?: string[]
   bracketChildIds?:  string[]
   bracketJunctionY?: number
+  /**
+   * For parents who appear in more than one bracket (remarried), each bracket
+   * records a small x-offset for that parent's stem so the two lines visually
+   * exit from slightly different points on the card bottom.
+   * Key = parentId, value = px offset (negative = left, positive = right).
+   */
+  bracketParentStemOffsets?: Record<string, number>
 }
 
 export interface LayoutResult {
@@ -170,65 +177,84 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
   }
 
   // ── Phase A: couple-unit builder ───────────────────────────────────────────
-  // Groups a generation row into visual units.
-  // A person with multiple spouses on the same row produces ONE unit:
-  //   MALE   → [ghost_wives…, male, primaryWife?]
-  //   FEMALE → [ghost_husbands…, primaryHusband?, female]
-  // This keeps all spouses adjacent and prevents any spouse from being a
-  // stranded singleton pushed far away by the overlap resolver.
+  // BFS collects every transitively-connected spouse on the row into one group,
+  // then identifies the "pivot" — the person with the most spouses (the one who
+  // remarried). The pivot is placed in the MIDDLE of the unit:
+  //   MALE pivot   → [ghost_wives…, male, primaryWife?]
+  //   FEMALE pivot → [ghost_husbands…, female, primaryHusband?]
+  // Using BFS (not one-hop lookup) prevents a non-pivot spouse from being
+  // processed first and accidentally consuming the pivot as her own husband,
+  // which would leave the pivot's other spouses as stranded singletons.
   function buildUnits(ids: string[]): string[][] {
     const visited = new Set<string>()
+    const idSet   = new Set(ids)
     const units: string[][] = []
 
     for (const id of ids) {
       if (visited.has(id)) continue
-      visited.add(id)
-      const node = nodeById.get(id)
 
-      // All spouses on this row that haven't been consumed yet
-      const rowSpouses = (spouseAllOf.get(id) ?? []).filter(
-        (s) => ids.includes(s) && !visited.has(s),
-      )
+      // BFS: gather the full connected spouse cluster on this row
+      const group: string[] = []
+      const queue = [id]
+      while (queue.length > 0) {
+        const cur = queue.shift()!
+        if (visited.has(cur)) continue
+        visited.add(cur)
+        group.push(cur)
+        for (const sid of (spouseAllOf.get(cur) ?? [])) {
+          if (!visited.has(sid) && idSet.has(sid)) queue.push(sid)
+        }
+      }
 
-      if (rowSpouses.length === 0) {
-        units.push([id])
+      if (group.length === 1) {
+        units.push(group)
         continue
       }
 
-      rowSpouses.forEach((s) => visited.add(s))
-      const primary = spousePairs.get(id)
+      // Pivot = person with the most in-group spouses (remarried person).
+      // Tiebreak: prefer whoever has children (blood descendant of this row).
+      let pivot = group[0]!
+      let pivotSpouseCount = 0
+      for (const cand of group) {
+        const cnt = (spouseAllOf.get(cand) ?? []).filter((s) => idSet.has(s)).length
+        const beats =
+          cnt > pivotSpouseCount ||
+          (cnt === pivotSpouseCount &&
+            hasDescendants.has(cand) &&
+            !hasDescendants.has(pivot))
+        if (beats) { pivot = cand; pivotSpouseCount = cnt }
+      }
 
-      if (node?.gender === 'MALE') {
-        // Ghosts = non-primary FEMALE spouses → to the LEFT of the male
-        const ghosts = rowSpouses.filter(
-          (s) => s !== primary && nodeById.get(s)?.gender === 'FEMALE',
+      const pivotNode    = nodeById.get(pivot)
+      const pivotPrimary = spousePairs.get(pivot)
+      const others       = group.filter((s) => s !== pivot)
+
+      if (pivotNode?.gender === 'MALE') {
+        // Ghost wives on the LEFT, pivot male in centre, primary wife on RIGHT
+        const ghosts = others.filter(
+          (s) => s !== pivotPrimary && nodeById.get(s)?.gender === 'FEMALE',
         )
         const hasPrimaryWife =
-          primary && rowSpouses.includes(primary) && nodeById.get(primary)?.gender === 'FEMALE'
-        const unit = [...ghosts, id, ...(hasPrimaryWife ? [primary!] : [])]
-        // Append any male co-spouses (unusual, but include them)
-        rowSpouses
-          .filter((s) => !unit.includes(s))
-          .forEach((s) => unit.push(s))
+          !!pivotPrimary &&
+          others.includes(pivotPrimary) &&
+          nodeById.get(pivotPrimary)?.gender === 'FEMALE'
+        const unit = [...ghosts, pivot, ...(hasPrimaryWife ? [pivotPrimary!] : [])]
+        others.filter((s) => !unit.includes(s)).forEach((s) => unit.push(s))
         units.push(unit)
-      } else if (node?.gender === 'FEMALE') {
-        // Ghosts = non-primary MALE spouses → to the FAR LEFT
-        const ghosts = rowSpouses.filter(
-          (s) => s !== primary && nodeById.get(s)?.gender === 'MALE',
+      } else if (pivotNode?.gender === 'FEMALE') {
+        // Ghost husbands on the LEFT, pivot female in centre, primary husband on RIGHT
+        const ghosts = others.filter(
+          (s) => s !== pivotPrimary && nodeById.get(s)?.gender === 'MALE',
         )
         const hasPrimaryHusband =
-          primary && rowSpouses.includes(primary) && nodeById.get(primary)?.gender === 'MALE'
-        const unit = [
-          ...ghosts,
-          ...(hasPrimaryHusband ? [primary!] : []),
-          id,
-        ]
-        rowSpouses
-          .filter((s) => !unit.includes(s))
-          .forEach((s) => unit.push(s))
+          !!pivotPrimary &&
+          others.includes(pivotPrimary) &&
+          nodeById.get(pivotPrimary)?.gender === 'MALE'
+        const unit = [...ghosts, pivot, ...(hasPrimaryHusband ? [pivotPrimary!] : [])]
+        others.filter((s) => !unit.includes(s)).forEach((s) => unit.push(s))
         units.push(unit)
       } else {
-        units.push([id, ...rowSpouses])
+        units.push([pivot, ...others])
       }
     }
     return units
@@ -667,11 +693,40 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
   // ── Build edges ────────────────────────────────────────────────────────────
   const flowEdges: FlowEdgeMeta[] = []
 
+  // Multi-marriage stem offsets: parents that appear in > 1 bracket get a small
+  // x-offset on their stem so each marriage's child line exits from a distinct
+  // point on the card bottom (small gap between them, toward the junction side).
+  const MARRIAGE_STEM_OFFSET = 6  // px each side
+  const parentBracketCount = new Map<string, number>()
+  for (const [, group] of parentGroups) {
+    if (group.childIds.length === 0) continue
+    for (const pid of group.parentIds) {
+      parentBracketCount.set(pid, (parentBracketCount.get(pid) ?? 0) + 1)
+    }
+  }
+
   for (const [key, group] of parentGroups) {
     if (group.childIds.length === 0) continue
     const maxParentY = Math.max(
       ...group.parentIds.map((pid) => positions.get(pid)?.y ?? 0),
     )
+
+    // Junction centre X = average of parent card centres (used to decide offset direction)
+    const junctionCenterX =
+      group.parentIds.reduce((s, pid) => s + (positions.get(pid)?.x ?? 0) + NODE_W / 2, 0) /
+      group.parentIds.length
+
+    // For multi-marriage parents, offset toward the junction so the two stems
+    // from the same card are visually distinct.
+    const stemOffsets: Record<string, number> = {}
+    for (const pid of group.parentIds) {
+      if ((parentBracketCount.get(pid) ?? 0) > 1) {
+        const pCenterX = (positions.get(pid)?.x ?? 0) + NODE_W / 2
+        stemOffsets[pid] =
+          junctionCenterX < pCenterX ? -MARRIAGE_STEM_OFFSET : MARRIAGE_STEM_OFFSET
+      }
+    }
+
     flowEdges.push({
       id:               `bracket_${key}`,
       source:           group.parentIds[0]!,
@@ -683,6 +738,7 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
       bracketParentIds: group.parentIds,
       bracketChildIds:  group.childIds,
       bracketJunctionY: maxParentY + NODE_H + JUNCTION_OFFSET,
+      ...(Object.keys(stemOffsets).length > 0 && { bracketParentStemOffsets: stemOffsets }),
     })
   }
 

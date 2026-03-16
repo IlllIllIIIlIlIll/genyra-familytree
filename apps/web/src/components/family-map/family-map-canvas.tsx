@@ -191,9 +191,10 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
       data: {
         relationshipType: em.relationshipType,
         ...(em.bracketParentIds && {
-          parentIds: em.bracketParentIds,
-          childIds:  em.bracketChildIds,
-          junctionY: em.bracketJunctionY,
+          parentIds:          em.bracketParentIds,
+          childIds:           em.bracketChildIds,
+          junctionY:          em.bracketJunctionY,
+          parentStemOffsets:  em.bracketParentStemOffsets,
         }),
       },
     })))

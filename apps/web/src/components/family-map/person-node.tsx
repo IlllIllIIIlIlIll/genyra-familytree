@@ -84,7 +84,7 @@ export const PersonNodeComponent = memo(function PersonNodeComponent({
                 {node.gender === 'MALE' ? '♂' : '♀'}
               </span>
             )}
-            <p className={cn(FONT.NODE_NAME, 'font-semibold text-slate-800 leading-tight truncate')}>
+            <p className={cn(FONT.NODE_NAME, 'font-semibold text-slate-800 leading-tight line-clamp-2')}>
               {abbreviateName(node.displayName, node.surname, MAX_CHARS.NODE_NAME)}
             </p>
           </div>
