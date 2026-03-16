@@ -1,6 +1,35 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+// ─── Toast ────────────────────────────────────────────────────────────────────
+
+export type ToastType = 'neutral' | 'success' | 'error'
+
+interface ToastItem {
+  id:      string
+  message: string
+  type:    ToastType
+}
+
+interface ToastState {
+  toasts:  ToastItem[]
+  toast:   (message: string, type?: ToastType, duration?: number) => void
+  dismiss: (id: string) => void
+}
+
+export const useToastStore = create<ToastState>()((set) => ({
+  toasts: [],
+  toast: (message, type = 'neutral', duration = 4000) => {
+    const id = Math.random().toString(36).slice(2)
+    set((s) => ({ toasts: [...s.toasts, { id, message, type }] }))
+    setTimeout(
+      () => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+      duration,
+    )
+  },
+  dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+}))
+
 interface AuthState {
   accessToken: string | null
   refreshToken: string | null

@@ -14,16 +14,34 @@
  *             both are placed at the DEEPER (higher number) generation.
  *   Pass 3 — Any node still unassigned (totally disconnected) → gen 0.
  *
- * Bracket lines:
- *   Instead of junction nodes and edges in React Flow, the layout returns
- *   ParentGroupMeta objects that describe each family group's geometry.
- *   The FamilyBracketOverlay component renders the H-bar bracket lines as
- *   a plain SVG overlay, bypassing React Flow's edge-to-node coordinate system.
+ * Layout flow (five phases):
+ *   Phase A — Initial top-down placement in couple units per generation row.
+ *             All spouses of a person (ghost + primary) are grouped into ONE
+ *             unit so no spouse ends up as a stranded singleton.
  *
- *   For each parent group:
- *     - Parent stems: from each parent's bottom center straight down to junctionY.
- *     - Horizontal bar: at junctionY, spanning leftmost to rightmost element.
- *     - Child stems: from junctionY straight down to each child's top center.
+ *   Phase B — Re-position children under their parent junction.
+ *             Single birth-order pass; male blood descendants bring their wife,
+ *             female blood descendants bring their husband (plus any ghost
+ *             husbands from prior marriages).
+ *             Gap between consecutive childless-sibling units = COUPLE_GAP;
+ *             gap adjacent to a unit with descendants = UNIT_GAP.
+ *             Multi-marriage families: children of successive marriages are
+ *             placed starting from the right edge of the prior marriage's
+ *             children (rightEdgeByParent).
+ *             Called TWICE: once after Phase A and once after Phase C.
+ *
+ *   Phase C — Bottom-up: re-centre parents over their actual child positions.
+ *             Uses a global `movedInPhaseC` set so shared parents (remarried)
+ *             are only moved once.
+ *
+ *   Overlap  — Three passes of BFS unit-aware horizontal overlap resolution:
+ *             after Phase B (1st run), after Phase C, and after Phase B (2nd run).
+ *             BFS transitive traversal keeps all connected spouses (e.g. [Ono,
+ *             Yono, Emin]) in one inseparable unit so no spouse is left behind.
+ *
+ *   Normalise — Final pass enforces COUPLE_GAP within each spouse unit
+ *             (only fixes squeezed couples; legitimately stretched ones are left).
+ *             Followed by a fourth overlap pass to propagate any resulting pushes.
  */
 
 import type { MapData } from '@genyra/shared-types'
@@ -41,7 +59,6 @@ export interface FlowEdgeMeta {
   targetHandle: string
   relationshipType: string
   edgeType: 'relationshipEdge' | 'bracketEdge'
-  // Only set on bracketEdge
   bracketParentIds?: string[]
   bracketChildIds?:  string[]
   bracketJunctionY?: number
@@ -65,12 +82,10 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
   const nodeById = new Map(nodes.map((n) => [n.id, n]))
 
   // ── Adjacency maps ─────────────────────────────────────────────────────────
-  const spousePairs = new Map<string, string>()
+  const spousePairs = new Map<string, string>()   // preferred (living) spouse
   const childrenOf  = new Map<string, Set<string>>()
   const parentsOf   = new Map<string, Set<string>>()
-
-  // spouseAllOf tracks ALL spouses per person (handles sequential remarriage)
-  const spouseAllOf = new Map<string, string[]>()
+  const spouseAllOf = new Map<string, string[]>()  // ALL spouses per person
 
   for (const e of edges) {
     if (e.relationshipType === 'SPOUSE') {
@@ -87,8 +102,7 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
     }
   }
 
-  // Resolve spousePairs: for each person with multiple spouses, prefer the
-  // living one; if all are deceased (or all are alive), just pick the last.
+  // Resolve spousePairs: prefer the living spouse; if all deceased pick last.
   for (const [personId, partnerIds] of spouseAllOf) {
     if (partnerIds.length === 1) {
       spousePairs.set(personId, partnerIds[0]!)
@@ -98,17 +112,18 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
     }
   }
 
+  // hasDescendants: nodes that are a direct parent of at least one child.
+  // Used to decide gap size: childless singletons pack with COUPLE_GAP,
+  // units that have children need UNIT_GAP breathing room for their subtree.
+  const hasDescendants = new Set<string>(childrenOf.keys())
+
   // ── Generation assignment ──────────────────────────────────────────────────
   const generation = new Map<string, number>()
 
-  // Seed all roots at gen 0
   for (const n of nodes) {
-    if ((parentsOf.get(n.id)?.size ?? 0) === 0) {
-      generation.set(n.id, 0)
-    }
+    if ((parentsOf.get(n.id)?.size ?? 0) === 0) generation.set(n.id, 0)
   }
 
-  // Iterative child propagation + spouse resolution until no more changes
   let dirty = true
   let safetyIter = 0
   while (dirty && safetyIter++ < nodes.length * 4) {
@@ -154,31 +169,72 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
     byGen.get(gen)!.push(id)
   }
 
-  // ── Couple-unit builder ────────────────────────────────────────────────────
+  // ── Phase A: couple-unit builder ───────────────────────────────────────────
+  // Groups a generation row into visual units.
+  // A person with multiple spouses on the same row produces ONE unit:
+  //   MALE   → [ghost_wives…, male, primaryWife?]
+  //   FEMALE → [ghost_husbands…, primaryHusband?, female]
+  // This keeps all spouses adjacent and prevents any spouse from being a
+  // stranded singleton pushed far away by the overlap resolver.
   function buildUnits(ids: string[]): string[][] {
     const visited = new Set<string>()
     const units: string[][] = []
+
     for (const id of ids) {
       if (visited.has(id)) continue
       visited.add(id)
-      const partner = spousePairs.get(id)
-      if (partner && ids.includes(partner) && !visited.has(partner)) {
-        visited.add(partner)
-        const node  = nodeById.get(id)
-        const pNode = nodeById.get(partner)
-        if (node?.gender === 'FEMALE' && pNode?.gender === 'MALE') {
-          units.push([partner, id])
-        } else {
-          units.push([id, partner])
-        }
-      } else {
+      const node = nodeById.get(id)
+
+      // All spouses on this row that haven't been consumed yet
+      const rowSpouses = (spouseAllOf.get(id) ?? []).filter(
+        (s) => ids.includes(s) && !visited.has(s),
+      )
+
+      if (rowSpouses.length === 0) {
         units.push([id])
+        continue
+      }
+
+      rowSpouses.forEach((s) => visited.add(s))
+      const primary = spousePairs.get(id)
+
+      if (node?.gender === 'MALE') {
+        // Ghosts = non-primary FEMALE spouses → to the LEFT of the male
+        const ghosts = rowSpouses.filter(
+          (s) => s !== primary && nodeById.get(s)?.gender === 'FEMALE',
+        )
+        const hasPrimaryWife =
+          primary && rowSpouses.includes(primary) && nodeById.get(primary)?.gender === 'FEMALE'
+        const unit = [...ghosts, id, ...(hasPrimaryWife ? [primary!] : [])]
+        // Append any male co-spouses (unusual, but include them)
+        rowSpouses
+          .filter((s) => !unit.includes(s))
+          .forEach((s) => unit.push(s))
+        units.push(unit)
+      } else if (node?.gender === 'FEMALE') {
+        // Ghosts = non-primary MALE spouses → to the FAR LEFT
+        const ghosts = rowSpouses.filter(
+          (s) => s !== primary && nodeById.get(s)?.gender === 'MALE',
+        )
+        const hasPrimaryHusband =
+          primary && rowSpouses.includes(primary) && nodeById.get(primary)?.gender === 'MALE'
+        const unit = [
+          ...ghosts,
+          ...(hasPrimaryHusband ? [primary!] : []),
+          id,
+        ]
+        rowSpouses
+          .filter((s) => !unit.includes(s))
+          .forEach((s) => unit.push(s))
+        units.push(unit)
+      } else {
+        units.push([id, ...rowSpouses])
       }
     }
     return units
   }
 
-  // ── Assign positions ───────────────────────────────────────────────────────
+  // ── Phase A: assign initial positions ─────────────────────────────────────
   const positions = new Map<string, { x: number; y: number }>()
   const maxGen    = byGen.size === 0 ? 0 : Math.max(...byGen.keys())
 
@@ -187,7 +243,7 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
     const units = buildUnits(ids)
 
     const unitWidths = units.map((u) =>
-      u.length === 2 ? NODE_W * 2 + COUPLE_GAP : NODE_W,
+      u.length === 1 ? NODE_W : (u.length - 1) * (NODE_W + COUPLE_GAP) + NODE_W,
     )
     const totalW =
       unitWidths.reduce((a, b) => a + b, 0) +
@@ -199,11 +255,8 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
     for (let ui = 0; ui < units.length; ui++) {
       const unit  = units[ui]!
       const unitW = unitWidths[ui]!
-      if (unit.length === 2) {
-        positions.set(unit[0]!, { x: curX, y })
-        positions.set(unit[1]!, { x: curX + NODE_W + COUPLE_GAP, y })
-      } else {
-        positions.set(unit[0]!, { x: curX, y })
+      for (let k = 0; k < unit.length; k++) {
+        positions.set(unit[k]!, { x: curX + k * (NODE_W + COUPLE_GAP), y })
       }
       curX += unitW + UNIT_GAP
     }
@@ -220,18 +273,21 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
     parentGroups.get(key)!.childIds.push(childId)
   }
 
-  // ── Reposition children under their parent junction ───────────────────────
-  //
-  // Gender rule:
-  //   Boys  → processed first; they anchor the left-to-right order.
-  //            Each boy brings his wife immediately to his right (if she exists).
-  //   Girls → only repositioned when married (placed next to their husband above).
-  //            Unmarried girls are appended after all male units in natural order.
-  //
-  // Centering: always uses the unified total-width formula (no odd/even branch).
-  // childY:    derived from the child's generation, not Math.max of positions
-  //            (avoids picking the wrong row when children span multiple gens).
-  {
+  // ── Helper: gap between two consecutive units ──────────────────────────────
+  // Childless siblings pack tightly (COUPLE_GAP).
+  // At least one unit with descendants → UNIT_GAP for subtree breathing room.
+  function unitGap(aIds: string[], bIds: string[]): number {
+    return aIds.some((id) => hasDescendants.has(id)) ||
+      bIds.some((id) => hasDescendants.has(id))
+      ? UNIT_GAP
+      : COUPLE_GAP
+  }
+
+  // ── Phase B: reposition children under their parent junction ──────────────
+  // Extracted as a callable function so it can be run twice:
+  //   1st run — after Phase A initial placement
+  //   2nd run — after Phase C (re-centres children under updated parent positions)
+  function runPhaseB(): void {
     const sortedGroups = [...parentGroups.entries()]
       .map(([key, group]) => {
         const maxParentY = Math.max(
@@ -241,74 +297,54 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
       })
       .filter((g) => g.group.childIds.length > 0)
       .sort((a, b) => {
-        // Primary: generation order (maxParentY ASC) so that parents are always
-        // repositioned before any of their children's groups are processed.
-        // Secondary: left-to-right by parent X so sibling groups don't overlap.
         if (a.maxParentY !== b.maxParentY) return a.maxParentY - b.maxParentY
         const avgX = (g: typeof a) =>
-          g.group.parentIds.reduce((s, id) => s + (positions.get(id)?.x ?? 0) + NODE_W / 2, 0) /
-          g.group.parentIds.length
+          g.group.parentIds.reduce(
+            (s, id) => s + (positions.get(id)?.x ?? 0) + NODE_W / 2,
+            0,
+          ) / g.group.parentIds.length
         return avgX(a) - avgX(b)
       })
 
-    const alreadyPlaced = new Set<string>()
+    // Fresh state each run — ensures children follow updated parent positions
+    const alreadyPlaced    = new Set<string>()
+    const rightEdgeByParent = new Map<string, number>()
 
     for (const { group, maxParentY } of sortedGroups) {
       const children = [...group.childIds]
         .filter((id) => !alreadyPlaced.has(id))
         .sort((a, b) => {
-          // Oldest child first (ascending birth date); unknown dates go last
-          const aDate = nodeById.get(a)?.birthDate
+          const aT = nodeById.get(a)?.birthDate
             ? new Date(nodeById.get(a)!.birthDate as string).getTime() : Infinity
-          const bDate = nodeById.get(b)?.birthDate
+          const bT = nodeById.get(b)?.birthDate
             ? new Date(nodeById.get(b)!.birthDate as string).getTime() : Infinity
-          return aDate - bDate
+          return aT - bT
         })
       if (children.length === 0) continue
 
-      // Use generation-based Y (all siblings share the same generation)
       const firstChildGen = generation.get(children[0]!) ?? 0
       const childY = firstChildGen * (NODE_H + GEN_GAP)
 
       const seenInUnit = new Set<string>()
-      // childOffset = center of the couple (midpoint of the two spouses) measured
-      // from the unit's left edge. Using the couple midpoint (not just the blood
-      // descendant's center) ensures the grandparent is visually centered over the
-      // evenly-spaced couple units rather than the blood-descendant positions alone.
       const units: Array<{ ids: string[]; w: number; childOffset: number }> = []
 
-      // Single pass in birth order — males and females handled together so the
-      // child ordering on screen matches biological birth order left-to-right.
-      //
-      // MALE blood descendant  → unit: [ghost_wives…, Male, PrimaryWife?]
-      //   couple midpoint from unit left = ((2g+1)*(NODE_W+COUPLE_GAP) + NODE_W) / 2
-      //   where g = number of ghost wives.
-      //
-      // FEMALE blood descendant → unit: [Husband, Female]  (husband on the LEFT
-      //   per the "woman always to the right of the man" rule; Husband is fetched
-      //   from Phase A positions so he moves into place here rather than staying
-      //   stranded at a Phase A X coordinate far from his wife).
-      //   couple midpoint from unit left = (NODE_W*2 + COUPLE_GAP) / 2  = 132
-      //
-      // Singles (no spouse) → unit: [Person], childOffset = NODE_W/2 = 60
       for (const cid of children) {
         if (seenInUnit.has(cid)) continue
         seenInUnit.add(cid)
 
-        const childNode    = nodeById.get(cid)
+        const childNode     = nodeById.get(cid)
         const primarySpouse = spousePairs.get(cid)
-        const primaryNode  = primarySpouse ? nodeById.get(primarySpouse) : undefined
+        const primaryNode   = primarySpouse ? nodeById.get(primarySpouse) : undefined
 
         if (childNode?.gender === 'MALE') {
-          // Ghost spouses = female non-primary spouses placed to the LEFT of the male
           const ghosts = (spouseAllOf.get(cid) ?? [])
-            .filter((sid) =>
-              sid !== primarySpouse &&
-              nodeById.get(sid)?.gender === 'FEMALE' &&
-              !seenInUnit.has(sid),
+            .filter(
+              (sid) =>
+                sid !== primarySpouse &&
+                nodeById.get(sid)?.gender === 'FEMALE' &&
+                !seenInUnit.has(sid),
             )
             .sort((a, b) => {
-              // Most recently born ghost closest to the male (inner left)
               const aT = nodeById.get(a)?.birthDate
                 ? new Date(nodeById.get(a)!.birthDate as string).getTime() : 0
               const bT = nodeById.get(b)?.birthDate
@@ -316,39 +352,47 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
               return bT - aT
             })
           ghosts.forEach((sid) => seenInUnit.add(sid))
-
-          const unitIds: string[] = [...ghosts, cid]
-          const g = ghosts.length  // number of ghosts to the left of the male
-
+          const g = ghosts.length
           const hasWife =
             primarySpouse &&
             primaryNode?.gender === 'FEMALE' &&
             !seenInUnit.has(primarySpouse)
-          if (hasWife) {
-            seenInUnit.add(primarySpouse!)
-            unitIds.push(primarySpouse!)
-          }
-
+          if (hasWife) seenInUnit.add(primarySpouse!)
+          const unitIds: string[] = [...ghosts, cid, ...(hasWife ? [primarySpouse!] : [])]
           const w = (unitIds.length - 1) * (NODE_W + COUPLE_GAP) + NODE_W
-          // Couple midpoint: center between [male, wife]; if no wife, just male center
+          // childOffset = couple midpoint: centre between male and primaryWife
           const childOffset = hasWife
             ? ((2 * g + 1) * (NODE_W + COUPLE_GAP) + NODE_W) / 2
             : g * (NODE_W + COUPLE_GAP) + NODE_W / 2
           units.push({ ids: unitIds, w, childOffset })
 
         } else if (childNode?.gender === 'FEMALE') {
-          // Female blood descendant: husband goes to her LEFT
+          // Ghost husbands = non-primary MALE spouses (prior marriages)
+          const ghosts = (spouseAllOf.get(cid) ?? [])
+            .filter(
+              (sid) =>
+                sid !== primarySpouse &&
+                nodeById.get(sid)?.gender === 'MALE' &&
+                !seenInUnit.has(sid),
+            )
+          ghosts.forEach((sid) => seenInUnit.add(sid))
+          const g = ghosts.length
           const hasHusband =
             primarySpouse &&
             primaryNode?.gender === 'MALE' &&
             !seenInUnit.has(primarySpouse)
+          if (hasHusband) seenInUnit.add(primarySpouse!)
+
           if (hasHusband) {
-            seenInUnit.add(primarySpouse!)
-            units.push({
-              ids:         [primarySpouse!, cid],
-              w:           NODE_W * 2 + COUPLE_GAP,
-              childOffset: (NODE_W * 2 + COUPLE_GAP) / 2, // couple midpoint = 132
-            })
+            const unitIds = [...ghosts, primarySpouse!, cid]
+            const w = (unitIds.length - 1) * (NODE_W + COUPLE_GAP) + NODE_W
+            // childOffset = couple midpoint of [primaryHusband, female]
+            const childOffset = ((2 * g + 1) * (NODE_W + COUPLE_GAP) + NODE_W) / 2
+            units.push({ ids: unitIds, w, childOffset })
+          } else if (g > 0) {
+            const unitIds = [...ghosts, cid]
+            const w = (unitIds.length - 1) * (NODE_W + COUPLE_GAP) + NODE_W
+            units.push({ ids: unitIds, w, childOffset: g * (NODE_W + COUPLE_GAP) + NODE_W / 2 })
           } else {
             units.push({ ids: [cid], w: NODE_W, childOffset: NODE_W / 2 })
           }
@@ -358,27 +402,46 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
         }
       }
 
-      // Junction center X = average of parent card centers
-      const juncCenterX =
-        group.parentIds.reduce((s, pid) => s + (positions.get(pid)?.x ?? 0) + NODE_W / 2, 0) /
-        group.parentIds.length
+      if (units.length === 0) continue
 
-      // Center the children (the male anchor of each unit) around juncCenterX.
-      // childOffset gives each unit's male center distance from the unit's left edge.
+      // Precompute variable gaps between consecutive units
+      const gaps: number[] = units.slice(0, -1).map((u, i) =>
+        unitGap(u.ids, units[i + 1]!.ids),
+      )
+
+      // Average child-centre offset (used for centring the group under junction)
       let childCenterOffsetSum = 0
-      let unitRunOffset = 0
-      for (const u of units) {
-        childCenterOffsetSum += unitRunOffset + u.childOffset
-        unitRunOffset += u.w + UNIT_GAP
+      let runOffset = 0
+      for (let ui = 0; ui < units.length; ui++) {
+        childCenterOffsetSum += runOffset + units[ui]!.childOffset
+        if (ui < units.length - 1) runOffset += units[ui]!.w + gaps[ui]!
       }
       const avgChildCenterOffset = childCenterOffsetSum / units.length
-      // Center exactly under the parents' junction — no Phase B overlap check.
-      // Each family group lands at its natural center; the final overlap
-      // resolution pass below handles any resulting collisions while keeping
-      // couple units intact.
-      let startX = juncCenterX - avgChildCenterOffset
 
-      for (const unit of units) {
+      // Junction centre = average of parent card centres
+      const juncCenterX =
+        group.parentIds.reduce(
+          (s, pid) => s + (positions.get(pid)?.x ?? 0) + NODE_W / 2,
+          0,
+        ) / group.parentIds.length
+
+      // Multi-marriage coordination: if a shared parent already has children
+      // placed, start this group's children to the right of them.
+      const sharedRightEdge = Math.max(
+        ...group.parentIds
+          .map((pid) => rightEdgeByParent.get(pid) ?? -Infinity)
+          .filter((x) => isFinite(x)),
+        -Infinity,
+      )
+
+      let startX = juncCenterX - avgChildCenterOffset
+      if (isFinite(sharedRightEdge) && sharedRightEdge + UNIT_GAP > startX) {
+        startX = sharedRightEdge + UNIT_GAP
+      }
+
+      // Place units
+      for (let ui = 0; ui < units.length; ui++) {
+        const unit = units[ui]!
         for (let k = 0; k < unit.ids.length; k++) {
           positions.set(unit.ids[k]!, {
             x: startX + k * (NODE_W + COUPLE_GAP),
@@ -386,20 +449,23 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
           })
           alreadyPlaced.add(unit.ids[k]!)
         }
-        startX += unit.w + UNIT_GAP
+        startX += unit.w + (gaps[ui] ?? 0)
       }
 
-      // Recentre the junction X over the repositioned children for the bracket bar
-      void maxParentY  // used only for bracketJunctionY below
+      // Record right edge of this placement for each parent (multi-marriage tracking).
+      // After the loop, startX is positioned at right edge of last unit (last gap = 0).
+      for (const pid of group.parentIds) {
+        rightEdgeByParent.set(pid, Math.max(rightEdgeByParent.get(pid) ?? -Infinity, startX))
+      }
+
+      void maxParentY // used for bracketJunctionY in edge builder below
     }
   }
 
-  // ── Final overlap resolution — couple-unit aware ───────────────────────────
-  //
-  // Nodes on the same row are grouped into "units" (a person + all their
-  // spouses on the same row).  Overlapping units are pushed right as a whole
-  // so married couples always stay together at COUPLE_GAP spacing.
-  {
+  // ── Overlap resolution — BFS unit-aware ───────────────────────────────────
+  // BFS traversal ensures all transitively-connected spouses on a row form ONE
+  // unit (e.g. [Ono, Yono, Emin]), so pushing the unit never splits a couple.
+  function resolveOverlaps(): void {
     const byY = new Map<number, string[]>()
     for (const [id, pos] of positions) {
       const yKey = Math.round(pos.y)
@@ -410,36 +476,39 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
     for (const yIds of byY.values()) {
       if (yIds.length <= 1) continue
 
-      // Build units: each person + all of their spouses on this row
-      const assigned = new Set<string>()
-      const units: string[][] = []
-
       yIds.sort((a, b) => (positions.get(a)?.x ?? 0) - (positions.get(b)?.x ?? 0))
+
+      // BFS: collect all transitively-connected spouses as one inseparable unit
+      const assigned = new Set<string>()
+      const rowUnits: string[][] = []
 
       for (const id of yIds) {
         if (assigned.has(id)) continue
-        assigned.add(id)
-        const unit: string[] = [id]
-        for (const sid of (spouseAllOf.get(id) ?? [])) {
-          if (!assigned.has(sid) && yIds.includes(sid)) {
-            assigned.add(sid)
-            unit.push(sid)
+        const unit: string[] = []
+        const queue = [id]
+        while (queue.length > 0) {
+          const cur = queue.shift()!
+          if (assigned.has(cur)) continue
+          assigned.add(cur)
+          unit.push(cur)
+          for (const sid of (spouseAllOf.get(cur) ?? [])) {
+            if (!assigned.has(sid) && yIds.includes(sid)) queue.push(sid)
           }
         }
         unit.sort((a, b) => (positions.get(a)?.x ?? 0) - (positions.get(b)?.x ?? 0))
-        units.push(unit)
+        rowUnits.push(unit)
       }
 
-      units.sort((a, b) => (positions.get(a[0]!)?.x ?? 0) - (positions.get(b[0]!)?.x ?? 0))
+      rowUnits.sort((a, b) => (positions.get(a[0]!)?.x ?? 0) - (positions.get(b[0]!)?.x ?? 0))
 
-      // Push overlapping units right as a whole
-      for (let i = 1; i < units.length; i++) {
-        const prev = units[i - 1]!
-        const curr = units[i]!
+      for (let i = 1; i < rowUnits.length; i++) {
+        const prev = rowUnits[i - 1]!
+        const curr = rowUnits[i]!
         const prevRight = Math.max(...prev.map((id) => (positions.get(id)?.x ?? 0) + NODE_W))
-        const currLeft  = Math.min(...curr.map((id)  =>  positions.get(id)?.x ?? 0))
-        if (currLeft < prevRight + UNIT_GAP) {
-          const delta = prevRight + UNIT_GAP - currLeft
+        const currLeft  = Math.min(...curr.map((id) =>  positions.get(id)?.x ?? 0))
+        const gap = unitGap(prev, curr)
+        if (currLeft < prevRight + gap) {
+          const delta = prevRight + gap - currLeft
           for (const id of curr) {
             const pos = positions.get(id)!
             positions.set(id, { ...pos, x: pos.x + delta })
@@ -449,14 +518,74 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
     }
   }
 
+  // ── Couple-gap normaliser ──────────────────────────────────────────────────
+  // After all overlap passes, within each BFS spouse unit enforce that no two
+  // consecutive members are closer than COUPLE_GAP. Only fixes squeezed couples
+  // (< COUPLE_GAP); legitimately-stretched couples are left as-is.
+  function normalizeCoupleGaps(): void {
+    const byY = new Map<number, string[]>()
+    for (const [id, pos] of positions) {
+      const yKey = Math.round(pos.y)
+      if (!byY.has(yKey)) byY.set(yKey, [])
+      byY.get(yKey)!.push(id)
+    }
+
+    for (const yIds of byY.values()) {
+      if (yIds.length <= 1) continue
+      yIds.sort((a, b) => (positions.get(a)?.x ?? 0) - (positions.get(b)?.x ?? 0))
+
+      const assigned = new Set<string>()
+      const rowUnits: string[][] = []
+
+      for (const id of yIds) {
+        if (assigned.has(id)) continue
+        const unit: string[] = []
+        const queue = [id]
+        while (queue.length > 0) {
+          const cur = queue.shift()!
+          if (assigned.has(cur)) continue
+          assigned.add(cur)
+          unit.push(cur)
+          for (const sid of (spouseAllOf.get(cur) ?? [])) {
+            if (!assigned.has(sid) && yIds.includes(sid)) queue.push(sid)
+          }
+        }
+        unit.sort((a, b) => (positions.get(a)?.x ?? 0) - (positions.get(b)?.x ?? 0))
+        rowUnits.push(unit)
+      }
+
+      for (const unit of rowUnits) {
+        if (unit.length <= 1) continue
+        // Enforce COUPLE_GAP between consecutive members within the unit
+        for (let i = 1; i < unit.length; i++) {
+          const leftPos  = positions.get(unit[i - 1]!)!
+          const rightPos = positions.get(unit[i]!)!
+          const actualGap = rightPos.x - leftPos.x - NODE_W
+          if (actualGap < COUPLE_GAP) {
+            const delta = COUPLE_GAP - actualGap
+            // Shift all nodes from index i to end of unit rightward
+            for (let j = i; j < unit.length; j++) {
+              const p = positions.get(unit[j]!)!
+              positions.set(unit[j]!, { ...p, x: p.x + delta })
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // ── Layout execution ───────────────────────────────────────────────────────
+  // 1. Phase B (1st run): position children under parents
+  runPhaseB()
+  // 2. Overlap pass 1: settle initial placement
+  resolveOverlaps()
+
   // ── Phase C — re-centre parents over their actual child positions ──────────
-  //
-  // Phase B centres children under the parents' Phase-A junction, but the final
-  // overlap resolution may shift child groups sideways. Phase C moves each parent
-  // couple so their midpoint aligns with the average midpoint of their children's
-  // couple units.  We iterate from the DEEPEST generation upward so that moving
-  // gen-1 parents doesn't misplace gen-2 children that have already been fixed.
+  // Iterates deepest parent groups first (bottom-up).
+  // A shared parent (remarried) is only moved ONCE via movedInPhaseC.
   {
+    const movedInPhaseC = new Set<string>()
+
     const genOrder = [...parentGroups.entries()]
       .map(([key, group]) => {
         const maxParentY = Math.max(
@@ -468,63 +597,76 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
       .sort((a, b) => b.maxParentY - a.maxParentY) // deepest first
 
     for (const { group } of genOrder) {
-      // Compute the midpoint of all children's couple units
-      // (couple midpoint = average of left-node center and right-node center within spouseAllOf)
-      const childMidpoints = group.childIds.map((cid) => {
-        const childPos = positions.get(cid)
-        if (!childPos) return null
-        // Find the child's spouse on the same row (if any)
-        const spouse = (spouseAllOf.get(cid) ?? []).find((sid) => {
-          const sp = positions.get(sid)
-          return sp && Math.abs(sp.y - childPos.y) < 1
+      const childMidpoints = group.childIds
+        .map((cid) => {
+          const childPos = positions.get(cid)
+          if (!childPos) return null
+          const spouse = (spouseAllOf.get(cid) ?? []).find((sid) => {
+            const sp = positions.get(sid)
+            return sp && Math.abs(sp.y - childPos.y) < 1
+          })
+          if (spouse) {
+            const spousePos = positions.get(spouse)!
+            return ((childPos.x + NODE_W / 2) + (spousePos.x + NODE_W / 2)) / 2
+          }
+          return childPos.x + NODE_W / 2
         })
-        if (spouse) {
-          const spousePos = positions.get(spouse)!
-          return ((childPos.x + NODE_W / 2) + (spousePos.x + NODE_W / 2)) / 2
-        }
-        return childPos.x + NODE_W / 2
-      }).filter((v): v is number => v !== null)
+        .filter((v): v is number => v !== null)
 
       if (childMidpoints.length === 0) continue
-      const avgChildMidpoint = childMidpoints.reduce((a, b) => a + b, 0) / childMidpoints.length
+      const avgChildMidpoint =
+        childMidpoints.reduce((a, b) => a + b, 0) / childMidpoints.length
 
-      // Current parent couple midpoint
-      const parentCenters = group.parentIds.map(
+      // Only move parents that haven't been moved yet by another group
+      const parentsToMove = group.parentIds.filter((pid) => !movedInPhaseC.has(pid))
+      if (parentsToMove.length === 0) continue
+
+      const parentCenters = parentsToMove.map(
         (pid) => (positions.get(pid)?.x ?? 0) + NODE_W / 2,
       )
-      const avgParentCenter = parentCenters.reduce((a, b) => a + b, 0) / parentCenters.length
+      const avgParentCenter =
+        parentCenters.reduce((a, b) => a + b, 0) / parentCenters.length
 
       const delta = avgChildMidpoint - avgParentCenter
-      if (Math.abs(delta) < 0.5) continue
+      if (Math.abs(delta) < 0.5) {
+        parentsToMove.forEach((pid) => movedInPhaseC.add(pid))
+        continue
+      }
 
-      // Move each parent (and their spouses on the same row) by delta
-      const moved = new Set<string>()
-      for (const pid of group.parentIds) {
-        if (moved.has(pid)) continue
+      // Move each parent + their same-row spouses.
+      // Guard against double-move: a spouse may already be marked (moved as
+      // another parent's spouse in a prior iteration of this loop).
+      for (const pid of parentsToMove) {
+        if (movedInPhaseC.has(pid)) continue  // already moved as another's spouse
+        movedInPhaseC.add(pid)
         const pPos = positions.get(pid)
         if (!pPos) continue
         positions.set(pid, { ...pPos, x: pPos.x + delta })
-        moved.add(pid)
-        // Move spouse too so the couple stays together
         for (const sid of (spouseAllOf.get(pid) ?? [])) {
-          if (moved.has(sid)) continue
+          if (movedInPhaseC.has(sid)) continue
           const sPos = positions.get(sid)
           if (!sPos || Math.abs(sPos.y - pPos.y) > 1) continue
           positions.set(sid, { ...sPos, x: sPos.x + delta })
-          moved.add(sid)
+          movedInPhaseC.add(sid)
         }
       }
     }
   }
 
+  // 3. Overlap pass 2: fix collisions introduced by Phase C
+  resolveOverlaps()
+  // 4. Phase B (2nd run): re-centre children under updated parent positions
+  runPhaseB()
+  // 5. Overlap pass 3: fix collisions from 2nd Phase B
+  resolveOverlaps()
+  // 6. Normalise couple gaps (fix any squeezed couples)
+  normalizeCoupleGaps()
+  // 7. Overlap pass 4: propagate any pushes from normalisation
+  resolveOverlaps()
+
   // ── Build edges ────────────────────────────────────────────────────────────
-  // bracketEdges FIRST so they render behind; relationshipEdges LAST so they
-  // render on top (and their white-bridge path covers bracket lines they cross).
   const flowEdges: FlowEdgeMeta[] = []
 
-  // PARENT_CHILD — one bracketEdge per parent group, rendered by BracketEdgeComponent.
-  // source/target are just valid node IDs so React Flow renders the edge;
-  // the component ignores handle positions and reads useNodes() directly.
   for (const [key, group] of parentGroups) {
     if (group.childIds.length === 0) continue
     const maxParentY = Math.max(
@@ -544,7 +686,6 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
     })
   }
 
-  // SPOUSE / SIBLING — relationship edges (render on top with white bridge)
   for (const e of edges) {
     if (e.relationshipType === 'PARENT_CHILD') continue
     const srcPos    = positions.get(e.sourceId)

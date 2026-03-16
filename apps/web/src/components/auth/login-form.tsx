@@ -7,19 +7,19 @@ import { useMutation } from '@tanstack/react-query'
 import { LoginSchema, type LoginDto } from '@genyra/shared-types'
 import { apiClient } from '@/lib/api-client'
 import { saveTokens } from '@/lib/auth'
-import { useAuthStore } from '@/store/map-store'
+import { useAuthStore, useToastStore } from '@/store/map-store'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 
 export function LoginForm() {
   const router = useRouter()
   const { setTokens, setUser } = useAuthStore()
+  const { toast } = useToastStore()
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-    setError,
   } = useForm<LoginDto>({ resolver: zodResolver(LoginSchema) })
 
   const loginMutation = useMutation({
@@ -47,9 +47,8 @@ export function LoginForm() {
         router.push('/map')
       }
     },
-    onError: (error: unknown) => {
-      console.error('Login error:', error)
-      setError('root', { message: 'Invalid NIK or password' })
+    onError: () => {
+      toast('NIK or password is incorrect.', 'error')
     },
   })
 
@@ -78,9 +77,6 @@ export function LoginForm() {
         {...register('password')}
         error={errors.password?.message}
       />
-      {errors.root && (
-        <p className="text-sm text-red-500 text-center">{errors.root.message}</p>
-      )}
       <Button
         type="submit"
         size="lg"

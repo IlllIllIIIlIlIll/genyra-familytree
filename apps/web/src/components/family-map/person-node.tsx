@@ -3,7 +3,7 @@
 import { memo } from 'react'
 import { Handle, Position, type NodeProps } from '@xyflow/react'
 import { Avatar } from '@/components/ui/avatar'
-import { cn } from '@/lib/utils'
+import { cn, abbreviateName } from '@/lib/utils'
 import { FONT, CANVAS, MAX_CHARS } from '@/lib/design-tokens'
 import type { PersonNode } from '@genyra/shared-types'
 
@@ -85,9 +85,7 @@ export const PersonNodeComponent = memo(function PersonNodeComponent({
               </span>
             )}
             <p className={cn(FONT.NODE_NAME, 'font-semibold text-slate-800 leading-tight truncate')}>
-              {node.displayName.length > MAX_CHARS.NODE_NAME
-                ? `${node.displayName.slice(0, MAX_CHARS.NODE_NAME)}…`
-                : node.displayName}
+              {abbreviateName(node.displayName, node.surname, MAX_CHARS.NODE_NAME)}
             </p>
           </div>
           {node.surname && (
