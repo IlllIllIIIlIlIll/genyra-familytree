@@ -690,6 +690,117 @@ export function computeFamilyLayout(mapData: MapData): LayoutResult {
   // 7. Overlap pass 4: propagate any pushes from normalisation
   resolveOverlaps()
 
+  // ── Phase D: multi-marriage subtree separation ─────────────────────────────
+  // After all positioning passes, ensure that the COMPLETE subtrees (all
+  // generations) rooted at each marriage's children are at least UNIT_GAP apart.
+  // When they overlap: push the right partner + its subtree rightward, then
+  // re-centre the shared parent (remarried person) between its two partners so
+  // it stays visually in the middle.
+  {
+    // BFS downward from rootIds collecting children + same-row spouses at every level.
+    function getSubtree(rootIds: string[]): Set<string> {
+      const result = new Set<string>()
+      const q = [...rootIds]
+      while (q.length > 0) {
+        const id = q.shift()!
+        if (result.has(id)) continue
+        result.add(id)
+        for (const cid of (childrenOf.get(id) ?? new Set())) q.push(cid)
+        const pos = positions.get(id)
+        for (const sid of (spouseAllOf.get(id) ?? [])) {
+          if (result.has(sid)) continue
+          const sPos = positions.get(sid)
+          if (pos && sPos && Math.abs(sPos.y - pos.y) < 1) q.push(sid)
+        }
+      }
+      return result
+    }
+
+    // Build parentId → [{partnerIds, childIds, subtree}] for parents in >1 group.
+    const pGroups = new Map<string, Array<{
+      partnerIds: string[]
+      childIds:   string[]
+      subtree:    Set<string>
+    }>>()
+
+    for (const [, group] of parentGroups) {
+      if (group.childIds.length === 0) continue
+      for (const pid of group.parentIds) {
+        if (!pGroups.has(pid)) pGroups.set(pid, [])
+        const entries = pGroups.get(pid)!
+        // Deduplicate: skip if a group with the same childIds already exists.
+        if (entries.some((e) => e.childIds.length === group.childIds.length &&
+          group.childIds.every((id) => e.childIds.includes(id)))) continue
+        entries.push({
+          partnerIds: group.parentIds.filter((p) => p !== pid),
+          childIds:   group.childIds,
+          subtree:    getSubtree(group.childIds),
+        })
+      }
+    }
+
+    for (const [parentId, groups] of pGroups) {
+      if (groups.length < 2) continue
+
+      // Sort marriage groups left → right by their children's leftmost position.
+      groups.sort((a, b) => {
+        const aL = Math.min(...a.childIds.map((id) => positions.get(id)?.x ?? 0))
+        const bL = Math.min(...b.childIds.map((id) => positions.get(id)?.x ?? 0))
+        return aL - bL
+      })
+
+      for (let i = 0; i < groups.length - 1; i++) {
+        const left  = groups[i]!
+        const right = groups[i + 1]!
+
+        if (left.subtree.size === 0 || right.subtree.size === 0) continue
+
+        // Full subtree bounds (re-read positions each iteration in case they shifted).
+        const leftRight  = Math.max(...[...left.subtree].map((id) => (positions.get(id)?.x ?? 0) + NODE_W))
+        const rightLeft  = Math.min(...[...right.subtree].map((id) =>  positions.get(id)?.x ?? 0))
+
+        if (rightLeft >= leftRight + UNIT_GAP) continue  // already clear
+
+        const delta = leftRight + UNIT_GAP - rightLeft
+
+        // 1. Move right partner(s) rightward.
+        for (const pid of right.partnerIds) {
+          const p = positions.get(pid)
+          if (p) positions.set(pid, { ...p, x: p.x + delta })
+        }
+
+        // 2. Move entire right subtree rightward.
+        for (const id of right.subtree) {
+          const p = positions.get(id)
+          if (p) positions.set(id, { ...p, x: p.x + delta })
+        }
+
+        // 3. Re-centre the shared parent between its left and right partners
+        //    so it remains visually in the middle (reads updated partner positions).
+        const sharedPos = positions.get(parentId)
+        if (sharedPos) {
+          const leftCenter = left.partnerIds.length > 0
+            ? left.partnerIds.reduce((s, id) => s + (positions.get(id)?.x ?? 0) + NODE_W / 2, 0) /
+              left.partnerIds.length
+            : sharedPos.x + NODE_W / 2
+          const rightCenter = right.partnerIds.length > 0
+            ? right.partnerIds.reduce((s, id) => s + (positions.get(id)?.x ?? 0) + NODE_W / 2, 0) /
+              right.partnerIds.length
+            : sharedPos.x + NODE_W / 2
+          positions.set(parentId, {
+            ...sharedPos,
+            x: (leftCenter + rightCenter) / 2 - NODE_W / 2,
+          })
+        }
+      }
+    }
+  }
+
+  // 8. Final overlap + gap passes after Phase D.
+  resolveOverlaps()
+  normalizeCoupleGaps()
+  resolveOverlaps()
+
   // ── Build edges ────────────────────────────────────────────────────────────
   const flowEdges: FlowEdgeMeta[] = []
 
