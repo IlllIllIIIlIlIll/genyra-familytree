@@ -4,6 +4,10 @@ import {
   NestFastifyApplication,
 } from '@nestjs/platform-fastify'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
+import fastifyMultipart from '@fastify/multipart'
+import fastifyStatic from '@fastify/static'
+import { join } from 'node:path'
+import { mkdirSync } from 'node:fs'
 import { AppModule } from './app.module'
 
 async function bootstrap(): Promise<void> {
@@ -12,8 +16,28 @@ async function bootstrap(): Promise<void> {
     new FastifyAdapter(),
   )
 
+  // Ensure upload directories exist
+  mkdirSync(join(process.cwd(), 'uploads', 'avatars'), { recursive: true })
+  mkdirSync(join(process.cwd(), 'uploads', 'photos'), { recursive: true })
+
+  // Register multipart support for file uploads
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await app.register(fastifyMultipart as any, {
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  })
+
+  // Serve uploaded files as static assets
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await app.register(fastifyStatic as any, {
+    root: join(process.cwd(), 'uploads'),
+    prefix: '/uploads/',
+    decorateReply: false,
+  })
+
   app.enableCors({
-    origin: process.env['FRONTEND_URL'] ?? 'http://localhost:3000',
+    origin:  process.env['FRONTEND_URL'] ?? 'http://localhost:3000',
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
   })
 

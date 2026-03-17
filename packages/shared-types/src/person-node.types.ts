@@ -26,11 +26,14 @@ export type PersonNode = z.infer<typeof PersonNodeSchema>
 
 export const CreatePersonNodeSchema = z.object({
   displayName: z.string().min(1).max(100),
-  birthDate: z.string().datetime().optional(),
-  birthPlace: z.string().max(200).optional(),
-  deathDate: z.string().datetime().optional(),
-  bio: z.string().max(2000).optional(),
-  avatarUrl: z.string().url().optional(),
+  gender: GenderSchema.optional().nullable(),
+  surname: z.string().max(50).optional().nullable(),
+  nik: z.string().length(16).regex(/^\d{16}$/, 'NIK must be 16 digits').optional().nullable(),
+  birthDate: z.string().datetime().optional().nullable(),
+  birthPlace: z.string().max(100).optional().nullable(),
+  deathDate: z.string().datetime().optional().nullable(),
+  bio: z.string().max(2000).optional().nullable(),
+  avatarUrl: z.string().url().optional().nullable(),
   isDeceased: z.boolean().optional().default(false),
   isPlaceholder: z.boolean().optional().default(false),
   canvasX: z.number().optional().default(0),
@@ -47,3 +50,22 @@ export const UpdateCanvasPositionSchema = z.object({
   canvasY: z.number(),
 })
 export type UpdateCanvasPositionDto = z.infer<typeof UpdateCanvasPositionSchema>
+
+export const PersonPhotoSchema = z.object({
+  id: z.string(),
+  url: z.string().url(),
+  caption: z.string().nullable(),
+  takenAt: z.string().datetime().nullable(),
+  sortOrder: z.number(),
+  personNodeId: z.string(),
+  createdAt: z.string().datetime(),
+})
+export type PersonPhoto = z.infer<typeof PersonPhotoSchema>
+
+export const CreatePersonPhotoSchema = z.object({
+  personNodeId: z.string(),
+  caption: z.string().max(500).optional().nullable(),
+  takenAt: z.string().datetime().optional().nullable(),
+  sortOrder: z.number().optional().default(0),
+})
+export type CreatePersonPhotoDto = z.infer<typeof CreatePersonPhotoSchema>

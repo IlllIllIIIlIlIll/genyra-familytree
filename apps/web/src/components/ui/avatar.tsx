@@ -24,8 +24,16 @@ function getInitials(name: string): string {
   return (first + (parts.length > 1 ? last : '')).toUpperCase()
 }
 
+const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'
+
+function resolveAvatarSrc(src: string): string {
+  if (src.startsWith('/uploads/')) return `${API_URL}${src}`
+  return src
+}
+
 export function Avatar({ src, name, size = 'md', className }: AvatarProps) {
   const px = pixelMap[size]
+  const resolvedSrc = src ? resolveAvatarSrc(src) : null
 
   return (
     <div
@@ -35,8 +43,8 @@ export function Avatar({ src, name, size = 'md', className }: AvatarProps) {
         className,
       )}
     >
-      {src ? (
-        <Image src={src} alt={name} width={px} height={px} className="object-cover w-full h-full" />
+      {resolvedSrc ? (
+        <Image src={resolvedSrc} alt={name} width={px} height={px} className="object-cover w-full h-full" />
       ) : (
         <span>{getInitials(name)}</span>
       )}

@@ -62,13 +62,6 @@ export function ProfileCard({ node }: ProfileCardProps) {
         >
           View Full Profile
         </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => router.push(`/profile/${node.id}/edit`)}
-        >
-          Edit
-        </Button>
       </div>
 
       {/* Coming-soon features teaser */}

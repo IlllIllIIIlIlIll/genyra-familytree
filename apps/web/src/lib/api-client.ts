@@ -18,6 +18,7 @@ import type {
   Invite,
   User,
   MemberStatus,
+  PersonPhoto,
 } from '@genyra/shared-types'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'
@@ -153,6 +154,44 @@ export const apiClient = {
 
   deletePersonNode: async (id: string): Promise<void> => {
     await http.delete(`/person-nodes/${id}`)
+  },
+
+  // Person Photos
+  getPersonPhotos: async (personNodeId: string): Promise<PersonPhoto[]> => {
+    const { data } = await http.get<PersonPhoto[]>(`/person-nodes/${personNodeId}/photos`)
+    return data
+  },
+
+  uploadPersonPhoto: async (
+    personNodeId: string,
+    file: File,
+    caption?: string,
+    takenAt?: string,
+  ): Promise<PersonPhoto> => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('personNodeId', personNodeId)
+    if (caption) form.append('caption', caption)
+    if (takenAt) form.append('takenAt', takenAt)
+    const { data } = await http.post<PersonPhoto>('/person-photos', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return data
+  },
+
+  deletePersonPhoto: async (id: string): Promise<void> => {
+    await http.delete(`/person-photos/${id}`)
+  },
+
+  uploadAvatar: async (personNodeId: string, file: File): Promise<PersonNode> => {
+    const form = new FormData()
+    form.append('file', file)
+    const { data } = await http.post<PersonNode>(
+      `/person-nodes/${personNodeId}/avatar`,
+      form,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    )
+    return data
   },
 
   // Relationships

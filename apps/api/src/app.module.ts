@@ -7,6 +7,7 @@ import { FamilyGroupsModule } from './family-groups/family-groups.module'
 import { PersonNodesModule } from './person-nodes/person-nodes.module'
 import { RelationshipsModule } from './relationships/relationships.module'
 import { InvitesModule } from './invites/invites.module'
+import { PersonPhotosModule } from './person-photos/person-photos.module'
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { InvitesModule } from './invites/invites.module'
     PersonNodesModule,
     RelationshipsModule,
     InvitesModule,
+    PersonPhotosModule,
   ],
 })
 export class AppModule {}

@@ -56,9 +56,12 @@ export default function ProfilePage() {
       <div className={cn('border-b px-4 pt-10 pb-6', headerBg)}>
         <button
           onClick={() => router.back()}
-          className="flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 mb-4 transition-colors"
+          aria-label="Back"
+          className="flex items-center justify-center w-8 h-8 rounded-full bg-white/70 hover:bg-white text-slate-500 hover:text-slate-700 mb-4 transition-colors shadow-sm"
         >
-          ← Back to map
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+            <path fillRule="evenodd" d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z" clipRule="evenodd" />
+          </svg>
         </button>
         <div className="flex items-end gap-4">
           <Avatar src={node.avatarUrl} name={node.displayName} size="xl" />

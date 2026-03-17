@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common'
+import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common'
 import type { Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import type { PersonNode, CreatePersonNodeDto, UpdatePersonNodeDto, UpdateCanvasPositionDto } from '@genyra/shared-types'
@@ -25,23 +25,36 @@ export class PersonNodesService {
   }
 
   async create(dto: CreatePersonNodeDto, familyGroupId: string): Promise<PersonNode> {
-    const node = await this.prisma.personNode.create({
-      data: {
-        displayName: dto.displayName,
-        birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
-        birthPlace: dto.birthPlace ?? null,
-        deathDate: dto.deathDate ? new Date(dto.deathDate) : null,
-        bio: dto.bio ?? null,
-        avatarUrl: dto.avatarUrl ?? null,
-        isDeceased: dto.isDeceased ?? false,
-        isPlaceholder: dto.isPlaceholder ?? false,
-        canvasX: dto.canvasX ?? 0,
-        canvasY: dto.canvasY ?? 0,
-        userId: dto.userId ?? null,
-        familyGroupId,
-      },
-    })
-    return this.toDto(node)
+    try {
+      const node = await this.prisma.personNode.create({
+        data: {
+          displayName: dto.displayName,
+          gender: dto.gender ?? null,
+          surname: dto.surname ?? null,
+          nik: dto.nik ?? null,
+          birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
+          birthPlace: dto.birthPlace ?? null,
+          deathDate: dto.deathDate ? new Date(dto.deathDate) : null,
+          bio: dto.bio ?? null,
+          avatarUrl: dto.avatarUrl ?? null,
+          isDeceased: dto.isDeceased ?? false,
+          isPlaceholder: dto.isPlaceholder ?? false,
+          canvasX: dto.canvasX ?? 0,
+          canvasY: dto.canvasY ?? 0,
+          userId: dto.userId ?? null,
+          familyGroupId,
+        },
+      })
+      return this.toDto(node)
+    } catch (e: unknown) {
+      if (
+        typeof e === 'object' && e !== null &&
+        'code' in e && (e as { code: string }).code === 'P2002'
+      ) {
+        throw new ConflictException('NIK already in use')
+      }
+      throw e
+    }
   }
 
   async update(
@@ -62,6 +75,9 @@ export class PersonNodesService {
 
     const updateData: Prisma.PersonNodeUpdateInput = {
       ...(dto.displayName !== undefined && { displayName: dto.displayName }),
+      ...(dto.gender !== undefined && { gender: dto.gender }),
+      ...(dto.surname !== undefined && { surname: dto.surname }),
+      ...(dto.nik !== undefined && { nik: dto.nik }),
       ...(dto.birthDate !== undefined && { birthDate: dto.birthDate ? new Date(dto.birthDate) : null }),
       ...(dto.birthPlace !== undefined && { birthPlace: dto.birthPlace }),
       ...(dto.deathDate !== undefined && { deathDate: dto.deathDate ? new Date(dto.deathDate) : null }),
@@ -71,11 +87,21 @@ export class PersonNodesService {
       ...(dto.isPlaceholder !== undefined && { isPlaceholder: dto.isPlaceholder }),
     }
 
-    const updated = await this.prisma.personNode.update({
-      where: { id },
-      data: updateData,
-    })
-    return this.toDto(updated)
+    try {
+      const updated = await this.prisma.personNode.update({
+        where: { id },
+        data: updateData,
+      })
+      return this.toDto(updated)
+    } catch (e: unknown) {
+      if (
+        typeof e === 'object' && e !== null &&
+        'code' in e && (e as { code: string }).code === 'P2002'
+      ) {
+        throw new ConflictException('NIK already in use')
+      }
+      throw e
+    }
   }
 
   async updateCanvasPosition(
