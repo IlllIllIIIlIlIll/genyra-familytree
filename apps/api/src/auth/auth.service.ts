@@ -30,13 +30,42 @@ export class AuthService {
         throw new BadRequestException('Invalid or expired invite code')
       }
 
+      // ── Validate referrer relationship (if provided) ──────────────────────
+      if (dto.referrerNik && dto.referrerRelationship) {
+        const referrerUser = await this.prisma.user.findUnique({
+          where:   { nik: dto.referrerNik },
+          include: { personNode: true },
+        })
+        if (!referrerUser?.personNode || referrerUser.personNode.familyGroupId !== invite.familyGroupId) {
+          throw new BadRequestException('Referrer not found in this family')
+        }
+
+        const referrerNodeId = referrerUser.personNode.id
+
+        if (dto.referrerRelationship === 'REFERRER_IS_SON' || dto.referrerRelationship === 'REFERRER_IS_DAUGHTER') {
+          // Registrant claims to be the PARENT of the referrer.
+          // A person can have at most one father and one mother.
+          const existingParent = await this.prisma.relationshipEdge.findFirst({
+            where: {
+              targetId:         referrerNodeId,
+              relationshipType: 'PARENT_CHILD',
+              source:           { gender: dto.gender },
+            },
+          })
+          if (existingParent) {
+            throw new BadRequestException('Relationship position not available')
+          }
+        }
+      }
+
       await this.prisma.$transaction(async (tx) => {
         await tx.user.create({
           data: {
-            nik: dto.nik,
+            nik:                 dto.nik,
             passwordHash,
-            status:      'PENDING_APPROVAL',
-            referrerNik: dto.referrerNik ?? null,
+            status:              'PENDING_APPROVAL',
+            referrerNik:         dto.referrerNik          ?? null,
+            referrerRelationship: dto.referrerRelationship ?? null,
             personNode: {
               create: {
                 displayName:     dto.displayName,

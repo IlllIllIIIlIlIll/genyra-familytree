@@ -116,6 +116,10 @@ export class PersonNodesService {
       throw new ForbiddenException('You must be in a family group to add a child')
     }
 
+    // Check NIK uniqueness
+    const existingNik = await this.prisma.user.findUnique({ where: { nik: dto.nik } })
+    if (existingNik) throw new BadRequestException('This NIK is already registered')
+
     // Must have a spouse relationship
     const spouseEdge = await this.prisma.relationshipEdge.findFirst({
       where: {
@@ -129,30 +133,47 @@ export class PersonNodesService {
       throw new BadRequestException('You must be married (have a spouse) to add a child')
     }
 
-    const spouseId = spouseEdge.sourceId === user.personNode.id
+    const spouseId      = spouseEdge.sourceId === user.personNode.id
       ? spouseEdge.targetId
       : spouseEdge.sourceId
-
     const isFamilyHead  = user.role === 'FAMILY_HEAD'
     const familyGroupId = user.personNode.familyGroupId
+    // Child inherits parent's passwordHash so they can log in with the family password
+    const passwordHash  = user.passwordHash
 
-    const child = await this.prisma.personNode.create({
-      data: {
-        displayName:     dto.displayName,
-        gender:          dto.gender ?? null,
-        birthDate:       dto.birthDate ? new Date(dto.birthDate) : null,
-        familyGroupId,
-        pendingApproval: !isFamilyHead,
-      },
-      include: { user: { select: { nik: true } } },
-    })
+    const child = await this.prisma.$transaction(async (tx) => {
+      const childUser = await tx.user.create({
+        data: {
+          nik:          dto.nik,
+          passwordHash,
+          role:         'FAMILY_MEMBER',
+          status:       isFamilyHead ? 'ACTIVE' : 'PENDING_APPROVAL',
+        },
+      })
 
-    await this.prisma.relationshipEdge.createMany({
-      data: [
-        { sourceId: user.personNode.id, targetId: child.id, relationshipType: 'PARENT_CHILD' },
-        { sourceId: spouseId,           targetId: child.id, relationshipType: 'PARENT_CHILD' },
-      ],
-      skipDuplicates: true,
+      const childNode = await tx.personNode.create({
+        data: {
+          displayName:     dto.displayName,
+          gender:          dto.gender ?? null,
+          surname:         dto.surname,
+          birthDate:       dto.birthDate ? new Date(dto.birthDate) : null,
+          birthPlace:      dto.birthPlace ?? null,
+          familyGroupId,
+          pendingApproval: !isFamilyHead,
+          userId:          childUser.id,
+        },
+        include: { user: { select: { nik: true } } },
+      })
+
+      await tx.relationshipEdge.createMany({
+        data: [
+          { sourceId: user.personNode!.id, targetId: childNode.id, relationshipType: 'PARENT_CHILD' },
+          { sourceId: spouseId,            targetId: childNode.id, relationshipType: 'PARENT_CHILD' },
+        ],
+        skipDuplicates: true,
+      })
+
+      return childNode
     })
 
     return this.toDto(child)

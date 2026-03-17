@@ -7,6 +7,15 @@ import { useAuthStore, useToastStore } from '@/store/map-store'
 import { cn } from '@/lib/utils'
 import type { Invite } from '@genyra/shared-types'
 
+const RELATIONSHIP_LABELS: Record<string, string> = {
+  REFERRER_IS_FATHER:   'they are my father',
+  REFERRER_IS_MOTHER:   'they are my mother',
+  REFERRER_IS_SON:      'they are my son',
+  REFERRER_IS_DAUGHTER: 'they are my daughter',
+  REFERRER_IS_SPOUSE:   'they are my spouse',
+  REFERRER_IS_SIBLING:  'they are my sibling',
+}
+
 type Tab = 'members' | 'children' | 'invites'
 
 export default function ApprovalsPage() {
@@ -118,6 +127,12 @@ export default function ApprovalsPage() {
                     <div>
                       <p className="font-semibold text-slate-800 text-sm">{user.displayName}</p>
                       <p className="text-xs text-slate-500">NIK: {user.nik}</p>
+                      {user.referrerNik && (
+                        <p className="text-xs text-brand-600 mt-0.5">
+                          Referred by NIK {user.referrerNik}
+                          {user.referrerRelationship && ` — ${RELATIONSHIP_LABELS[user.referrerRelationship] ?? user.referrerRelationship}`}
+                        </p>
+                      )}
                       <p className="text-xs text-slate-400 mt-0.5">
                         Registered {new Date(user.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                       </p>

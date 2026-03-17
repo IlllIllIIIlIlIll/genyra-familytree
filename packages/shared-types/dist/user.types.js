@@ -1,10 +1,19 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CreateFamilyWithParentsSchema = exports.UpdateUserSchema = exports.UserSchema = exports.LoginSchema = exports.JoinGroupSchema = exports.RegisterSchema = exports.MemberStatusSchema = exports.UserRoleSchema = exports.GenderSchema = void 0;
+exports.CreateFamilyWithParentsSchema = exports.UpdateUserSchema = exports.UserSchema = exports.LoginSchema = exports.JoinGroupSchema = exports.RegisterSchema = exports.ReferrerRelationshipSchema = exports.MemberStatusSchema = exports.UserRoleSchema = exports.GenderSchema = void 0;
 const zod_1 = require("zod");
 exports.GenderSchema = zod_1.z.enum(['MALE', 'FEMALE']);
 exports.UserRoleSchema = zod_1.z.enum(['FAMILY_MEMBER', 'FAMILY_HEAD']);
 exports.MemberStatusSchema = zod_1.z.enum(['PENDING_APPROVAL', 'ACTIVE', 'DEACTIVATED']);
+// From the registrant's perspective: what is the referrer to them?
+exports.ReferrerRelationshipSchema = zod_1.z.enum([
+    'REFERRER_IS_FATHER',
+    'REFERRER_IS_MOTHER',
+    'REFERRER_IS_SON',
+    'REFERRER_IS_DAUGHTER',
+    'REFERRER_IS_SPOUSE',
+    'REFERRER_IS_SIBLING',
+]);
 exports.RegisterSchema = zod_1.z.object({
     password: zod_1.z.string().min(8).max(100),
     displayName: zod_1.z.string().min(1).max(100),
@@ -16,6 +25,7 @@ exports.RegisterSchema = zod_1.z.object({
     // join path
     inviteCode: zod_1.z.string().optional(),
     referrerNik: zod_1.z.string().length(16).regex(/^\d{16}$/).optional(),
+    referrerRelationship: exports.ReferrerRelationshipSchema.optional(),
     // create path
     familyName: zod_1.z.string().min(1).max(100).optional(),
 }).refine((d) => !!(d.inviteCode ?? d.familyName), { message: 'Either an invite code or a family name is required', path: ['inviteCode'] });
@@ -39,6 +49,9 @@ exports.UserSchema = zod_1.z.object({
     surname: zod_1.z.string(),
     birthDate: zod_1.z.string(),
     birthPlace: zod_1.z.string(),
+    // Referral info (only populated for pending members)
+    referrerNik: zod_1.z.string().nullable().optional(),
+    referrerRelationship: zod_1.z.string().nullable().optional(),
 });
 exports.UpdateUserSchema = zod_1.z.object({
     password: zod_1.z.string().min(8).max(100).optional(),

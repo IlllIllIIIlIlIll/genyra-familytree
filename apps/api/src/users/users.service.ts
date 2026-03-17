@@ -86,6 +86,8 @@ export class UsersService {
       role: string
       status: string
       createdAt: Date
+      referrerNik?:          string | null
+      referrerRelationship?: string | null
     },
     node: {
       displayName: string
@@ -108,6 +110,8 @@ export class UsersService {
       status: user.status as User['status'],
       familyGroupId: node.familyGroupId,
       createdAt: user.createdAt.toISOString(),
+      referrerNik:          user.referrerNik          ?? null,
+      referrerRelationship: user.referrerRelationship ?? null,
     }
   }
 }

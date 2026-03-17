@@ -2,11 +2,6 @@ export default function PendingApprovalPage() {
   return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-brand-50">
       <div className="w-full max-w-sm text-center">
-        <img
-          src="/genyra_logo.png"
-          alt="Genyra"
-          className="h-20 w-20 mx-auto mb-6"
-        />
         <div className="bg-white rounded-2xl shadow-sm border border-brand-100 p-8">
           <div className="text-4xl mb-4">⏳</div>
           <h1 className="text-xl font-semibold text-slate-800 mb-2">

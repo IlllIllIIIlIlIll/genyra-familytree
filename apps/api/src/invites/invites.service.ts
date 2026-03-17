@@ -3,9 +3,9 @@ import { PrismaService } from '../prisma/prisma.service'
 import type { Invite } from '@genyra/shared-types'
 
 function generateInviteCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  let code = 'GEN-'
-  for (let i = 0; i < 4; i++) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+  let code = ''
+  for (let i = 0; i < 5; i++) {
     code += chars[Math.floor(Math.random() * chars.length)]
   }
   return code

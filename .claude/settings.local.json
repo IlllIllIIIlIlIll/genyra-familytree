@@ -28,7 +28,8 @@
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(k,v\\) for k,v in {**d.get\\(''''dependencies'''',{}\\),**d.get\\(''''devDependencies'''',{}\\)}.items\\(\\)]\")",
       "Bash(PRISMA_MIGRATE_ACCEPT_DATA_LOSS=1 npx prisma migrate dev --name remove_person_node_nik)",
       "Bash(tasklist /FI \"IMAGENAME eq node.exe\")",
-      "Bash(tasklist)"
+      "Bash(tasklist)",
+      "Bash(del:*)"
     ]
   }
 }

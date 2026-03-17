@@ -131,7 +131,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
 
   const {
     isProfilePanelOpen, selectedNodeId,
-    closeProfilePanel, openProfilePanel,
+    setSelectedNode, closeProfilePanel, openProfilePanel,
     isCleanView, toggleCleanView,
   } = useMapUIStore()
 
@@ -242,6 +242,20 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
       }
     },
     [onNodesChange, updatePositionMutation],
+  )
+
+  // Single tap/click → select node for edge highlighting + center camera.
+  const handleNodeClick = useCallback(
+    (_event: React.MouseEvent, node: Node<FlowNodeData>) => {
+      if (node.type !== 'personNode') return
+      setSelectedNode(node.id)
+      setCenter(
+        node.position.x + CANVAS.NODE_W / 2,
+        node.position.y + CANVAS.NODE_H / 2,
+        { zoom: 1.5, duration: 600 },
+      )
+    },
+    [setSelectedNode, setCenter],
   )
 
   const cancelLongPress = useCallback(() => {
@@ -389,7 +403,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   return (
     // touch-action: none overrides `html { touch-action: manipulation }` in globals.css
     // which would otherwise swallow React Flow's pointer drag events on touch screens.
-    <div className="flex-1 flex flex-col" style={{ touchAction: 'none' }}>
+    <div className="flex-1 flex flex-col pb-14" style={{ touchAction: 'none' }}>
 
       {/* ── Family header bar (hidden in clean view) ────────────────────────── */}
       {!isCleanView && (
@@ -437,6 +451,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
           edges={displayEdges}
           onNodesChange={handleNodesChange}
           onEdgesChange={onEdgesChange}
+          onNodeClick={handleNodeClick}
           onNodeDragStart={cancelLongPress}
           onNodeMouseLeave={cancelLongPress}
           onPaneClick={closeProfilePanel}

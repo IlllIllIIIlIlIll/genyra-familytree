@@ -19,6 +19,7 @@ import type {
   User,
   MemberStatus,
   PersonPhoto,
+  AddChildDto,
 } from '@genyra/shared-types'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'
@@ -208,7 +209,7 @@ export const apiClient = {
   },
 
   // Add a child (requires spouse relationship on server side)
-  addChild: async (dto: { displayName: string; gender?: string; birthDate?: string }): Promise<PersonNode> => {
+  addChild: async (dto: AddChildDto): Promise<PersonNode> => {
     const { data } = await http.post<PersonNode>('/person-nodes/add-child', dto)
     return data
   },

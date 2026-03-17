@@ -9,22 +9,37 @@ export type UserRole = z.infer<typeof UserRoleSchema>
 export const MemberStatusSchema = z.enum(['PENDING_APPROVAL', 'ACTIVE', 'DEACTIVATED'])
 export type MemberStatus = z.infer<typeof MemberStatusSchema>
 
+// From the registrant's perspective: what is the referrer to them?
+export const ReferrerRelationshipSchema = z.enum([
+  'REFERRER_IS_FATHER',
+  'REFERRER_IS_MOTHER',
+  'REFERRER_IS_SON',
+  'REFERRER_IS_DAUGHTER',
+  'REFERRER_IS_SPOUSE',
+  'REFERRER_IS_SIBLING',
+])
+export type ReferrerRelationship = z.infer<typeof ReferrerRelationshipSchema>
+
 export const RegisterSchema = z.object({
-  password:     z.string().min(8).max(100),
-  displayName:  z.string().min(1).max(100),
-  gender:       GenderSchema,
-  surname:      z.string().min(1).max(50).regex(/^\S+$/, 'Surname must be a single word with no spaces'),
-  nik:          z.string().length(16).regex(/^\d{16}$/, 'NIK must be exactly 16 digits'),
-  birthDate:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-  birthPlace:   z.string().min(1).max(100),
+  password:             z.string().min(8, 'Password must be at least 8 characters').max(100),
+  displayName:          z.string().min(1, 'Full name is required').max(100),
+  gender:               GenderSchema,
+  surname:              z.string().min(1, 'Nickname is required').max(50).regex(/^\S+$/, 'Nickname must be a single word'),
+  nik:                  z.string().length(16, 'NIK must be exactly 16 digits').regex(/^\d{16}$/, 'NIK must be exactly 16 digits'),
+  birthDate:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Please enter a valid date'),
+  birthPlace:           z.string().min(1, 'Place of birth is required').max(100),
   // join path
-  inviteCode:   z.string().optional(),
-  referrerNik:  z.string().length(16).regex(/^\d{16}$/).optional(),
+  inviteCode:           z.string().optional(),
+  referrerNik:          z.string().length(16, 'NIK must be exactly 16 digits').regex(/^\d{16}$/, 'NIK must be exactly 16 digits').optional(),
+  referrerRelationship: ReferrerRelationshipSchema.optional(),
   // create path
-  familyName:   z.string().min(1).max(100).optional(),
+  familyName:           z.string().min(1).max(100).optional(),
 }).refine(
   (d) => !!(d.inviteCode ?? d.familyName),
   { message: 'Either an invite code or a family name is required', path: ['inviteCode'] },
+).refine(
+  (d) => !d.inviteCode || !!d.referrerNik,
+  { message: 'Referrer NIK is required when joining a family', path: ['referrerNik'] },
 )
 export type RegisterDto = z.infer<typeof RegisterSchema>
 
@@ -52,6 +67,9 @@ export const UserSchema = z.object({
   surname: z.string(),
   birthDate: z.string(),
   birthPlace: z.string(),
+  // Referral info (only populated for pending members)
+  referrerNik:          z.string().nullable().optional(),
+  referrerRelationship: z.string().nullable().optional(),
 })
 export type User = z.infer<typeof UserSchema>
 

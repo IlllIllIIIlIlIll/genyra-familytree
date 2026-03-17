@@ -49,8 +49,9 @@ model User {
   passwordHash String
   role         UserRole     @default(FAMILY_MEMBER)
   status       MemberStatus @default(ACTIVE)
-  refreshToken String?
-  referrerNik  String?
+  refreshToken         String?
+  referrerNik          String?
+  referrerRelationship String?
 
   personNode   PersonNode?
 
