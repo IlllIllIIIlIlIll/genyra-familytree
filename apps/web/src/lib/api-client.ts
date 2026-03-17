@@ -206,4 +206,28 @@ export const apiClient = {
     const { data } = await http.get<Invite[]>(`/invites/group/${groupId}`)
     return data
   },
+
+  // Add a child (requires spouse relationship on server side)
+  addChild: async (dto: { displayName: string; gender?: string; birthDate?: string }): Promise<PersonNode> => {
+    const { data } = await http.post<PersonNode>('/person-nodes/add-child', dto)
+    return data
+  },
+
+  // Approve a pending person node (Family Head only)
+  approvePersonNode: async (id: string): Promise<PersonNode> => {
+    const { data } = await http.patch<PersonNode>(`/person-nodes/${id}/approve`)
+    return data
+  },
+
+  // Get pending person nodes for current family group (Family Head only)
+  getPendingNodes: async (): Promise<PersonNode[]> => {
+    const { data } = await http.get<PersonNode[]>('/users/pending-nodes')
+    return data
+  },
+
+  // Refresh an invite (generates new code, resets expiry)
+  refreshInvite: async (inviteId: string): Promise<Invite> => {
+    const { data } = await http.patch<Invite>(`/invites/${inviteId}/refresh`)
+    return data
+  },
 }

@@ -75,6 +75,7 @@ export declare const MapDataSchema: z.ZodObject<{
         avatarUrl: z.ZodNullable<z.ZodString>;
         isDeceased: z.ZodBoolean;
         isPlaceholder: z.ZodBoolean;
+        pendingApproval: z.ZodBoolean;
         canvasX: z.ZodNumber;
         canvasY: z.ZodNumber;
         userId: z.ZodNullable<z.ZodString>;
@@ -96,6 +97,7 @@ export declare const MapDataSchema: z.ZodObject<{
         avatarUrl: string | null;
         isDeceased: boolean;
         isPlaceholder: boolean;
+        pendingApproval: boolean;
         canvasX: number;
         canvasY: number;
         userId: string | null;
@@ -115,6 +117,7 @@ export declare const MapDataSchema: z.ZodObject<{
         avatarUrl: string | null;
         isDeceased: boolean;
         isPlaceholder: boolean;
+        pendingApproval: boolean;
         canvasX: number;
         canvasY: number;
         userId: string | null;
@@ -165,6 +168,7 @@ export declare const MapDataSchema: z.ZodObject<{
         avatarUrl: string | null;
         isDeceased: boolean;
         isPlaceholder: boolean;
+        pendingApproval: boolean;
         canvasX: number;
         canvasY: number;
         userId: string | null;
@@ -197,6 +201,7 @@ export declare const MapDataSchema: z.ZodObject<{
         avatarUrl: string | null;
         isDeceased: boolean;
         isPlaceholder: boolean;
+        pendingApproval: boolean;
         canvasX: number;
         canvasY: number;
         userId: string | null;

@@ -47,8 +47,14 @@ export function LoginForm() {
         router.push('/map')
       }
     },
-    onError: () => {
-      toast('NIK or password is incorrect.', 'error')
+    onError: (error: { response?: { data?: { message?: string }; status?: number } }) => {
+      const status  = (error as { response?: { status?: number } }).response?.status
+      const message = error.response?.data?.message ?? 'NIK or password is incorrect.'
+      if (status === 403 && message.toLowerCase().includes('pending')) {
+        router.push('/pending-approval')
+        return
+      }
+      toast(message, 'error')
     },
   })
 

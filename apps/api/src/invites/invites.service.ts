@@ -75,6 +75,30 @@ export class InvitesService {
     return invites.map((i) => this.toDto(i))
   }
 
+  async refresh(inviteId: string, requestingUserId: string): Promise<Invite> {
+    const user = await this.prisma.user.findUnique({ where: { id: requestingUserId } })
+    if (user?.role !== 'FAMILY_HEAD') throw new ForbiddenException('Only Family Head can refresh invites')
+
+    let code: string
+    let attempts = 0
+    do {
+      code = generateInviteCode()
+      attempts++
+      if (attempts > 10) throw new BadRequestException('Could not generate unique code')
+    } while (await this.prisma.invite.findUnique({ where: { code } }))
+
+    const invite = await this.prisma.invite.update({
+      where: { id: inviteId },
+      data: {
+        code,
+        status:    'UNUSED',
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        usedAt:    null,
+      },
+    })
+    return this.toDto(invite)
+  }
+
   private toDto(invite: {
     id: string
     code: string

@@ -3,8 +3,8 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { PersonNodesService } from './person-nodes.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator'
-import { CreatePersonNodeSchema, UpdatePersonNodeSchema, UpdateCanvasPositionSchema } from '@genyra/shared-types'
-import type { PersonNode, CreatePersonNodeDto, UpdatePersonNodeDto, UpdateCanvasPositionDto } from '@genyra/shared-types'
+import { CreatePersonNodeSchema, UpdatePersonNodeSchema, UpdateCanvasPositionSchema, AddChildSchema } from '@genyra/shared-types'
+import type { PersonNode, CreatePersonNodeDto, UpdatePersonNodeDto, UpdateCanvasPositionDto, AddChildDto } from '@genyra/shared-types'
 
 @ApiTags('person-nodes')
 @ApiBearerAuth()
@@ -57,5 +57,24 @@ export class PersonNodesController {
     @CurrentUser() user: JwtPayload,
   ): Promise<void> {
     return this.personNodesService.delete(id, user.sub)
+  }
+
+  @Post('add-child')
+  @ApiOperation({ summary: 'Father adds a newborn child (requires SPOUSE relationship)' })
+  async addChild(
+    @Body() body: unknown,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<PersonNode> {
+    const dto = AddChildSchema.parse(body) satisfies AddChildDto
+    return this.personNodesService.addChild(dto, user.sub)
+  }
+
+  @Patch(':id/approve')
+  @ApiOperation({ summary: 'Approve a pending person node (Family Head only)' })
+  async approve(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<PersonNode> {
+    return this.personNodesService.approve(id, user.sub)
   }
 }

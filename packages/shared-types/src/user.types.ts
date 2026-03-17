@@ -10,23 +10,22 @@ export const MemberStatusSchema = z.enum(['PENDING_APPROVAL', 'ACTIVE', 'DEACTIV
 export type MemberStatus = z.infer<typeof MemberStatusSchema>
 
 export const RegisterSchema = z.object({
-  password: z.string().min(8).max(100),
-  displayName: z.string().min(1).max(100),
-  gender: GenderSchema,
-  surname: z
-    .string()
-    .min(1)
-    .max(50)
-    .regex(/^\S+$/, 'Surname must be a single word with no spaces'),
-  nik: z
-    .string()
-    .length(16)
-    .regex(/^\d{16}$/, 'NIK must be exactly 16 digits'),
-  birthDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
-  birthPlace: z.string().min(1).max(100),
-})
+  password:     z.string().min(8).max(100),
+  displayName:  z.string().min(1).max(100),
+  gender:       GenderSchema,
+  surname:      z.string().min(1).max(50).regex(/^\S+$/, 'Surname must be a single word with no spaces'),
+  nik:          z.string().length(16).regex(/^\d{16}$/, 'NIK must be exactly 16 digits'),
+  birthDate:    z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+  birthPlace:   z.string().min(1).max(100),
+  // join path
+  inviteCode:   z.string().optional(),
+  referrerNik:  z.string().length(16).regex(/^\d{16}$/).optional(),
+  // create path
+  familyName:   z.string().min(1).max(100).optional(),
+}).refine(
+  (d) => !!(d.inviteCode ?? d.familyName),
+  { message: 'Either an invite code or a family name is required', path: ['inviteCode'] },
+)
 export type RegisterDto = z.infer<typeof RegisterSchema>
 
 export const JoinGroupSchema = z.object({

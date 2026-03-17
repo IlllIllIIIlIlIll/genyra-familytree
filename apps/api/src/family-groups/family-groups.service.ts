@@ -193,6 +193,7 @@ export class FamilyGroupsService {
       avatarUrl: n.photos[0]?.url ?? n.avatarUrl ?? null,
       isDeceased: n.isDeceased,
       isPlaceholder: n.isPlaceholder,
+      pendingApproval: n.pendingApproval,
       canvasX: n.canvasX,
       canvasY: n.canvasY,
       userId: n.userId ?? null,

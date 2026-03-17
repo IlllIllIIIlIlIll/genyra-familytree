@@ -70,6 +70,7 @@ export const PersonNodeComponent = memo(function PersonNodeComponent({
             ? selectedCls(node.gender, node.isDeceased)
             : hoverCls(node.gender, node.isDeceased),
           isCurrentUser && 'ring-2 ring-brand-400 ring-offset-1',
+          node.pendingApproval && 'opacity-60 border-dashed',
         )}
       >
         <Avatar
@@ -110,6 +111,11 @@ export const PersonNodeComponent = memo(function PersonNodeComponent({
         {node.isPlaceholder && (
           <span className={cn('absolute -top-1.5 -left-1.5 font-bold bg-slate-400 text-white px-1.5 py-0.5 rounded-full', FONT.NODE_BADGE)}>
             ?
+          </span>
+        )}
+        {node.pendingApproval && (
+          <span className={cn('absolute -top-1.5 -left-1.5 font-bold bg-yellow-400 text-white px-1.5 py-0.5 rounded-full', FONT.NODE_BADGE)}>
+            ⏳
           </span>
         )}
       </div>

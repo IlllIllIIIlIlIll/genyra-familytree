@@ -5,7 +5,7 @@ export declare const UserRoleSchema: z.ZodEnum<["FAMILY_MEMBER", "FAMILY_HEAD"]>
 export type UserRole = z.infer<typeof UserRoleSchema>;
 export declare const MemberStatusSchema: z.ZodEnum<["PENDING_APPROVAL", "ACTIVE", "DEACTIVATED"]>;
 export type MemberStatus = z.infer<typeof MemberStatusSchema>;
-export declare const RegisterSchema: z.ZodObject<{
+export declare const RegisterSchema: z.ZodEffects<z.ZodObject<{
     password: z.ZodString;
     displayName: z.ZodString;
     gender: z.ZodEnum<["MALE", "FEMALE"]>;
@@ -13,6 +13,9 @@ export declare const RegisterSchema: z.ZodObject<{
     nik: z.ZodString;
     birthDate: z.ZodString;
     birthPlace: z.ZodString;
+    inviteCode: z.ZodOptional<z.ZodString>;
+    referrerNik: z.ZodOptional<z.ZodString>;
+    familyName: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     password: string;
     displayName: string;
@@ -21,6 +24,9 @@ export declare const RegisterSchema: z.ZodObject<{
     nik: string;
     birthDate: string;
     birthPlace: string;
+    inviteCode?: string | undefined;
+    referrerNik?: string | undefined;
+    familyName?: string | undefined;
 }, {
     password: string;
     displayName: string;
@@ -29,6 +35,31 @@ export declare const RegisterSchema: z.ZodObject<{
     nik: string;
     birthDate: string;
     birthPlace: string;
+    inviteCode?: string | undefined;
+    referrerNik?: string | undefined;
+    familyName?: string | undefined;
+}>, {
+    password: string;
+    displayName: string;
+    gender: "MALE" | "FEMALE";
+    surname: string;
+    nik: string;
+    birthDate: string;
+    birthPlace: string;
+    inviteCode?: string | undefined;
+    referrerNik?: string | undefined;
+    familyName?: string | undefined;
+}, {
+    password: string;
+    displayName: string;
+    gender: "MALE" | "FEMALE";
+    surname: string;
+    nik: string;
+    birthDate: string;
+    birthPlace: string;
+    inviteCode?: string | undefined;
+    referrerNik?: string | undefined;
+    familyName?: string | undefined;
 }>;
 export type RegisterDto = z.infer<typeof RegisterSchema>;
 export declare const JoinGroupSchema: z.ZodObject<{

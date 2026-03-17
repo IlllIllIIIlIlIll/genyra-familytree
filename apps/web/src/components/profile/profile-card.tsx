@@ -1,10 +1,13 @@
 'use client'
 
+import { useState } from 'react'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { FONT, MAX_CHARS } from '@/lib/design-tokens'
 import { cn } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
+import { useAuthStore } from '@/store/map-store'
+import { AddChildModal } from './add-child-modal'
 import type { PersonNode } from '@genyra/shared-types'
 
 interface ProfileCardProps {
@@ -12,7 +15,9 @@ interface ProfileCardProps {
 }
 
 export function ProfileCard({ node }: ProfileCardProps) {
-  const router = useRouter()
+  const router      = useRouter()
+  const authUserId  = useAuthStore((s) => s.userId)
+  const [showAddChild, setShowAddChild] = useState(false)
   const birthYear = node.birthDate ? new Date(node.birthDate).getFullYear() : null
   const deathYear = node.deathDate ? new Date(node.deathDate).getFullYear() : null
 
@@ -53,16 +58,22 @@ export function ProfileCard({ node }: ProfileCardProps) {
         </p>
       )}
 
-      <div className="flex gap-3 mb-4">
+      <div className="flex flex-col gap-2 mb-4">
         <Button
           size="sm"
           variant="secondary"
-          className="flex-1"
+          className="w-full"
           onClick={() => router.push(`/profile/${node.id}`)}
         >
           View Full Profile
         </Button>
+        {node.userId === authUserId && (
+          <Button variant="secondary" className="w-full" onClick={() => setShowAddChild(true)}>
+            Add child
+          </Button>
+        )}
       </div>
+      {showAddChild && <AddChildModal onClose={() => setShowAddChild(false)} />}
     </div>
   )
 }

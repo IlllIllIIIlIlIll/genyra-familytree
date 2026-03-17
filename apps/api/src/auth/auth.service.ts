@@ -17,41 +17,79 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto): Promise<{ message: string }> {
-    const existingNik = await this.prisma.user.findUnique({
-      where: { nik: dto.nik },
-    })
-    if (existingNik) {
-      throw new BadRequestException('NIK already registered')
-    }
+    const existingNik = await this.prisma.user.findUnique({ where: { nik: dto.nik } })
+    if (existingNik) throw new BadRequestException('NIK already registered')
 
     const passwordHash = await argon2.hash(dto.password)
-    const birthDate = new Date(dto.birthDate)
+    const birthDate    = new Date(dto.birthDate)
 
-    await this.prisma.user.create({
-      data: {
-        nik: dto.nik,
-        passwordHash,
-        status: 'ACTIVE',
-        personNode: {
-          create: {
-            displayName: dto.displayName,
-            surname: dto.surname,
-            gender: dto.gender,
-            birthDate,
-            birthPlace: dto.birthPlace,
+    if (dto.inviteCode) {
+      // ── JOIN EXISTING FAMILY ───────────────────────────────────────────────
+      const invite = await this.prisma.invite.findUnique({ where: { code: dto.inviteCode } })
+      if (!invite || invite.status !== 'UNUSED' || invite.expiresAt < new Date()) {
+        throw new BadRequestException('Invalid or expired invite code')
+      }
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.create({
+          data: {
+            nik: dto.nik,
+            passwordHash,
+            status:      'PENDING_APPROVAL',
+            referrerNik: dto.referrerNik ?? null,
+            personNode: {
+              create: {
+                displayName:     dto.displayName,
+                surname:         dto.surname,
+                gender:          dto.gender,
+                birthDate,
+                birthPlace:      dto.birthPlace,
+                familyGroupId:   invite.familyGroupId,
+                pendingApproval: true,
+              },
+            },
+          },
+        })
+        await tx.invite.update({
+          where: { id: invite.id },
+          data:  { status: 'USED', usedAt: new Date() },
+        })
+      })
+
+      return { message: 'Registration submitted. Awaiting family head approval.' }
+    } else if (dto.familyName) {
+      // ── CREATE NEW FAMILY ─────────────────────────────────────────────────
+      const familyGroup = await this.prisma.familyGroup.create({
+        data: { name: dto.familyName },
+      })
+
+      await this.prisma.user.create({
+        data: {
+          nik: dto.nik,
+          passwordHash,
+          role:   'FAMILY_HEAD',
+          status: 'ACTIVE',
+          personNode: {
+            create: {
+              displayName:   dto.displayName,
+              surname:       dto.surname,
+              gender:        dto.gender,
+              birthDate,
+              birthPlace:    dto.birthPlace,
+              familyGroupId: familyGroup.id,
+            },
           },
         },
-      },
-    })
+      })
 
-    return { message: 'Registration successful. Please log in.' }
+      return { message: 'Family created! You can now log in.' }
+    } else {
+      throw new BadRequestException('Either an invite code or a family name is required')
+    }
   }
 
   async login(dto: LoginDto): Promise<AuthTokens> {
-    const user = await this.prisma.user.findUnique({
-      where: { nik: dto.nik },
-    })
-
+    const user = await this.prisma.user.findUnique({ where: { nik: dto.nik } })
     if (!user) throw new UnauthorizedException('Invalid credentials')
 
     const passwordValid = await argon2.verify(user.passwordHash, dto.password)
@@ -59,6 +97,9 @@ export class AuthService {
 
     if (user.status === 'DEACTIVATED') {
       throw new ForbiddenException('Account has been deactivated')
+    }
+    if (user.status === 'PENDING_APPROVAL') {
+      throw new ForbiddenException('Account is pending approval from the family head')
     }
 
     return this.generateTokens(user.id, user.role)
@@ -77,29 +118,24 @@ export class AuthService {
   async logout(userId: string): Promise<void> {
     await this.prisma.user.update({
       where: { id: userId },
-      data: { refreshToken: null },
+      data:  { refreshToken: null },
     })
   }
 
-  private async generateTokens(
-    userId: string,
-    role: string,
-  ): Promise<AuthTokens> {
+  private async generateTokens(userId: string, role: string): Promise<AuthTokens> {
     const payload = { sub: userId, role }
 
-    const accessSecret = process.env['JWT_ACCESS_SECRET']
+    const accessSecret  = process.env['JWT_ACCESS_SECRET']
     const refreshSecret = process.env['JWT_REFRESH_SECRET']
-    if (!accessSecret || !refreshSecret) {
-      throw new Error('JWT secrets not configured')
-    }
+    if (!accessSecret || !refreshSecret) throw new Error('JWT secrets not configured')
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
-        secret: accessSecret,
+        secret:    accessSecret,
         expiresIn: process.env['JWT_ACCESS_EXPIRES_IN'] ?? '15m',
       }),
       this.jwtService.signAsync(payload, {
-        secret: refreshSecret,
+        secret:    refreshSecret,
         expiresIn: process.env['JWT_REFRESH_EXPIRES_IN'] ?? '7d',
       }),
     ])
@@ -107,7 +143,7 @@ export class AuthService {
     const hashedRefresh = await argon2.hash(refreshToken)
     await this.prisma.user.update({
       where: { id: userId },
-      data: { refreshToken: hashedRefresh },
+      data:  { refreshToken: hashedRefresh },
     })
 
     return { accessToken, refreshToken }

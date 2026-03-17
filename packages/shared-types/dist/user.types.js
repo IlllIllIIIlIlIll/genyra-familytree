@@ -9,20 +9,16 @@ exports.RegisterSchema = zod_1.z.object({
     password: zod_1.z.string().min(8).max(100),
     displayName: zod_1.z.string().min(1).max(100),
     gender: exports.GenderSchema,
-    surname: zod_1.z
-        .string()
-        .min(1)
-        .max(50)
-        .regex(/^\S+$/, 'Surname must be a single word with no spaces'),
-    nik: zod_1.z
-        .string()
-        .length(16)
-        .regex(/^\d{16}$/, 'NIK must be exactly 16 digits'),
-    birthDate: zod_1.z
-        .string()
-        .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+    surname: zod_1.z.string().min(1).max(50).regex(/^\S+$/, 'Surname must be a single word with no spaces'),
+    nik: zod_1.z.string().length(16).regex(/^\d{16}$/, 'NIK must be exactly 16 digits'),
+    birthDate: zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
     birthPlace: zod_1.z.string().min(1).max(100),
-});
+    // join path
+    inviteCode: zod_1.z.string().optional(),
+    referrerNik: zod_1.z.string().length(16).regex(/^\d{16}$/).optional(),
+    // create path
+    familyName: zod_1.z.string().min(1).max(100).optional(),
+}).refine((d) => !!(d.inviteCode ?? d.familyName), { message: 'Either an invite code or a family name is required', path: ['inviteCode'] });
 exports.JoinGroupSchema = zod_1.z.object({
     inviteCode: zod_1.z.string().min(1),
 });

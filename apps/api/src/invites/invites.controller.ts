@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Param, UseGuards } from '@nestjs/common'
+import { Controller, Post, Get, Patch, Body, Param, UseGuards } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { InvitesService } from './invites.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
@@ -33,5 +33,14 @@ export class InvitesController {
     @CurrentUser() user: JwtPayload,
   ): Promise<Invite[]> {
     return this.invitesService.listByGroup(groupId, user.sub)
+  }
+
+  @Patch(':id/refresh')
+  @ApiOperation({ summary: 'Refresh an invite code (generates new code, resets expiry)' })
+  async refresh(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<Invite> {
+    return this.invitesService.refresh(id, user.sub)
   }
 }

@@ -139,6 +139,8 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   const clearAuth     = useAuthStore((s) => s.clear)
   const currentUserId = useAuthStore((s) => s.userId)
   const canvasRef     = useRef<HTMLDivElement>(null)
+  const longPressTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressNodeId = useRef<string | null>(null)
   const [minimapSize, setMinimapSize] = useState(getMinimapSize)
 
   useEffect(() => {
@@ -242,12 +244,40 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
     [onNodesChange, updatePositionMutation],
   )
 
-  const handleNodeClick = useCallback(
-    (_event: React.MouseEvent, node: Node<FlowNodeData>) => {
-      if (node.type !== 'personNode') return
-      openProfilePanel(node.id)
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null }
+    longPressNodeId.current = null
+  }, [])
+
+  // ReactFlow v12 does not expose onNodeMouseDown, so we attach the handler to
+  // the canvas wrapper div and resolve the node id from the DOM hierarchy.
+  const handleCanvasPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      cancelLongPress()
+      // Walk up the DOM to find a ReactFlow node element (has data-id attribute)
+      const el = (event.target as HTMLElement).closest<HTMLElement>('[data-id]')
+      if (!el) return
+      const nodeId = el.getAttribute('data-id')
+      if (!nodeId) return
+      // Only trigger for personNode types
+      const rfNode = getNode(nodeId)
+      if (!rfNode || rfNode.type !== 'personNode') return
+
+      longPressNodeId.current = nodeId
+      longPressTimer.current = setTimeout(() => {
+        longPressNodeId.current = null
+        openProfilePanel(nodeId)
+        const freshNode = getNode(nodeId)
+        if (freshNode) {
+          setCenter(
+            freshNode.position.x + CANVAS.NODE_W / 2,
+            freshNode.position.y + CANVAS.NODE_H / 2,
+            { zoom: 1.5, duration: 600 },
+          )
+        }
+      }, 500)
     },
-    [openProfilePanel],
+    [cancelLongPress, openProfilePanel, getNode, setCenter],
   )
 
   const handleLogout = useCallback(() => {
@@ -395,13 +425,20 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
       )}
 
       {/* ── Canvas area ────────────────────────────────────────────────────── */}
-      <div ref={canvasRef} className="flex-1 relative">
+      <div
+        ref={canvasRef}
+        className="flex-1 relative"
+        onPointerDown={handleCanvasPointerDown}
+        onPointerUp={cancelLongPress}
+        onPointerCancel={cancelLongPress}
+      >
         <ReactFlow
           nodes={nodes}
           edges={displayEdges}
           onNodesChange={handleNodesChange}
           onEdgesChange={onEdgesChange}
-          onNodeClick={handleNodeClick}
+          onNodeDragStart={cancelLongPress}
+          onNodeMouseLeave={cancelLongPress}
           onPaneClick={closeProfilePanel}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}

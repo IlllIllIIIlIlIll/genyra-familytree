@@ -12,6 +12,7 @@ export declare const PersonNodeSchema: z.ZodObject<{
     avatarUrl: z.ZodNullable<z.ZodString>;
     isDeceased: z.ZodBoolean;
     isPlaceholder: z.ZodBoolean;
+    pendingApproval: z.ZodBoolean;
     canvasX: z.ZodNumber;
     canvasY: z.ZodNumber;
     userId: z.ZodNullable<z.ZodString>;
@@ -33,6 +34,7 @@ export declare const PersonNodeSchema: z.ZodObject<{
     avatarUrl: string | null;
     isDeceased: boolean;
     isPlaceholder: boolean;
+    pendingApproval: boolean;
     canvasX: number;
     canvasY: number;
     userId: string | null;
@@ -52,6 +54,7 @@ export declare const PersonNodeSchema: z.ZodObject<{
     avatarUrl: string | null;
     isDeceased: boolean;
     isPlaceholder: boolean;
+    pendingApproval: boolean;
     canvasX: number;
     canvasY: number;
     userId: string | null;
@@ -69,6 +72,7 @@ export declare const CreatePersonNodeSchema: z.ZodObject<{
     avatarUrl: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     isDeceased: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
     isPlaceholder: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+    pendingApproval: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
     canvasX: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
     canvasY: z.ZodDefault<z.ZodOptional<z.ZodNumber>>;
     userId: z.ZodOptional<z.ZodString>;
@@ -76,6 +80,7 @@ export declare const CreatePersonNodeSchema: z.ZodObject<{
     displayName: string;
     isDeceased: boolean;
     isPlaceholder: boolean;
+    pendingApproval: boolean;
     canvasX: number;
     canvasY: number;
     gender?: "MALE" | "FEMALE" | null | undefined;
@@ -97,6 +102,7 @@ export declare const CreatePersonNodeSchema: z.ZodObject<{
     avatarUrl?: string | null | undefined;
     isDeceased?: boolean | undefined;
     isPlaceholder?: boolean | undefined;
+    pendingApproval?: boolean | undefined;
     canvasX?: number | undefined;
     canvasY?: number | undefined;
     userId?: string | undefined;
@@ -113,6 +119,7 @@ export declare const UpdatePersonNodeSchema: z.ZodObject<{
     avatarUrl: z.ZodOptional<z.ZodNullable<z.ZodOptional<z.ZodString>>>;
     isDeceased: z.ZodOptional<z.ZodDefault<z.ZodOptional<z.ZodBoolean>>>;
     isPlaceholder: z.ZodOptional<z.ZodDefault<z.ZodOptional<z.ZodBoolean>>>;
+    pendingApproval: z.ZodOptional<z.ZodDefault<z.ZodOptional<z.ZodBoolean>>>;
     canvasX: z.ZodOptional<z.ZodDefault<z.ZodOptional<z.ZodNumber>>>;
     canvasY: z.ZodOptional<z.ZodDefault<z.ZodOptional<z.ZodNumber>>>;
     userId: z.ZodOptional<z.ZodOptional<z.ZodString>>;
@@ -127,6 +134,7 @@ export declare const UpdatePersonNodeSchema: z.ZodObject<{
     avatarUrl?: string | null | undefined;
     isDeceased?: boolean | undefined;
     isPlaceholder?: boolean | undefined;
+    pendingApproval?: boolean | undefined;
     canvasX?: number | undefined;
     canvasY?: number | undefined;
     userId?: string | undefined;
@@ -141,6 +149,7 @@ export declare const UpdatePersonNodeSchema: z.ZodObject<{
     avatarUrl?: string | null | undefined;
     isDeceased?: boolean | undefined;
     isPlaceholder?: boolean | undefined;
+    pendingApproval?: boolean | undefined;
     canvasX?: number | undefined;
     canvasY?: number | undefined;
     userId?: string | undefined;
@@ -200,4 +209,18 @@ export declare const CreatePersonPhotoSchema: z.ZodObject<{
     sortOrder?: number | undefined;
 }>;
 export type CreatePersonPhotoDto = z.infer<typeof CreatePersonPhotoSchema>;
+export declare const AddChildSchema: z.ZodObject<{
+    displayName: z.ZodString;
+    gender: z.ZodOptional<z.ZodEnum<["MALE", "FEMALE"]>>;
+    birthDate: z.ZodOptional<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    displayName: string;
+    gender?: "MALE" | "FEMALE" | undefined;
+    birthDate?: string | undefined;
+}, {
+    displayName: string;
+    gender?: "MALE" | "FEMALE" | undefined;
+    birthDate?: string | undefined;
+}>;
+export type AddChildDto = z.infer<typeof AddChildSchema>;
 //# sourceMappingURL=person-node.types.d.ts.map

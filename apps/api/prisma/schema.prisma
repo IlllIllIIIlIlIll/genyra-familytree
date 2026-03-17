@@ -50,6 +50,7 @@ model User {
   role         UserRole     @default(FAMILY_MEMBER)
   status       MemberStatus @default(ACTIVE)
   refreshToken String?
+  referrerNik  String?
 
   personNode   PersonNode?
 
@@ -82,7 +83,8 @@ model PersonNode {
   bio           String?
   avatarUrl     String?
   isDeceased    Boolean   @default(false)
-  isPlaceholder Boolean   @default(false)
+  isPlaceholder   Boolean   @default(false)
+  pendingApproval Boolean   @default(false)
 
   canvasX Float @default(0)
   canvasY Float @default(0)

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CreatePersonPhotoSchema = exports.PersonPhotoSchema = exports.UpdateCanvasPositionSchema = exports.UpdatePersonNodeSchema = exports.CreatePersonNodeSchema = exports.PersonNodeSchema = void 0;
+exports.AddChildSchema = exports.CreatePersonPhotoSchema = exports.PersonPhotoSchema = exports.UpdateCanvasPositionSchema = exports.UpdatePersonNodeSchema = exports.CreatePersonNodeSchema = exports.PersonNodeSchema = void 0;
 const zod_1 = require("zod");
 const user_types_1 = require("./user.types");
 exports.PersonNodeSchema = zod_1.z.object({
@@ -16,6 +16,7 @@ exports.PersonNodeSchema = zod_1.z.object({
     avatarUrl: zod_1.z.string().nullable(),
     isDeceased: zod_1.z.boolean(),
     isPlaceholder: zod_1.z.boolean(),
+    pendingApproval: zod_1.z.boolean(),
     canvasX: zod_1.z.number(),
     canvasY: zod_1.z.number(),
     userId: zod_1.z.string().nullable(),
@@ -34,6 +35,7 @@ exports.CreatePersonNodeSchema = zod_1.z.object({
     avatarUrl: zod_1.z.string().optional().nullable(),
     isDeceased: zod_1.z.boolean().optional().default(false),
     isPlaceholder: zod_1.z.boolean().optional().default(false),
+    pendingApproval: zod_1.z.boolean().optional().default(false),
     canvasX: zod_1.z.number().optional().default(0),
     canvasY: zod_1.z.number().optional().default(0),
     userId: zod_1.z.string().optional(),
@@ -57,5 +59,10 @@ exports.CreatePersonPhotoSchema = zod_1.z.object({
     caption: zod_1.z.string().max(500).optional().nullable(),
     takenAt: zod_1.z.string().datetime().optional().nullable(),
     sortOrder: zod_1.z.number().optional().default(0),
+});
+exports.AddChildSchema = zod_1.z.object({
+    displayName: zod_1.z.string().min(1).max(100),
+    gender: user_types_1.GenderSchema.optional(),
+    birthDate: zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 //# sourceMappingURL=person-node.types.js.map

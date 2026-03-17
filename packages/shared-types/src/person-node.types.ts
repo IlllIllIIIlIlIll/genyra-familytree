@@ -14,6 +14,7 @@ export const PersonNodeSchema = z.object({
   avatarUrl: z.string().nullable(),
   isDeceased: z.boolean(),
   isPlaceholder: z.boolean(),
+  pendingApproval: z.boolean(),
   canvasX: z.number(),
   canvasY: z.number(),
   userId: z.string().nullable(),
@@ -35,6 +36,7 @@ export const CreatePersonNodeSchema = z.object({
   avatarUrl: z.string().optional().nullable(),
   isDeceased: z.boolean().optional().default(false),
   isPlaceholder: z.boolean().optional().default(false),
+  pendingApproval: z.boolean().optional().default(false),
   canvasX: z.number().optional().default(0),
   canvasY: z.number().optional().default(0),
   userId: z.string().optional(),
@@ -68,3 +70,10 @@ export const CreatePersonPhotoSchema = z.object({
   sortOrder: z.number().optional().default(0),
 })
 export type CreatePersonPhotoDto = z.infer<typeof CreatePersonPhotoSchema>
+
+export const AddChildSchema = z.object({
+  displayName: z.string().min(1).max(100),
+  gender:      GenderSchema.optional(),
+  birthDate:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+})
+export type AddChildDto = z.infer<typeof AddChildSchema>

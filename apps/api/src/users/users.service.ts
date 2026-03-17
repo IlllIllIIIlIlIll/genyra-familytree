@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import type { User, MemberStatus } from '@genyra/shared-types'
+import type { User, MemberStatus, PersonNode } from '@genyra/shared-types'
 
 @Injectable()
 export class UsersService {
@@ -29,10 +29,54 @@ export class UsersService {
   async updateStatus(userId: string, status: MemberStatus): Promise<User> {
     const user = await this.prisma.user.update({
       where: { id: userId },
-      data: { status },
+      data:  {
+        status,
+        ...(status === 'ACTIVE' && {
+          personNode: { update: { pendingApproval: false } },
+        }),
+      },
       include: { personNode: true },
     })
     return this.toUserDto(user, user.personNode!)
+  }
+
+  async findPendingNodesByGroup(requestingUserId: string): Promise<PersonNode[]> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: requestingUserId },
+      include: { personNode: { select: { familyGroupId: true } } },
+    })
+    if (!user || user.role !== 'FAMILY_HEAD') return []
+    const familyGroupId = user.personNode?.familyGroupId
+    if (!familyGroupId) return []
+
+    const nodes = await this.prisma.personNode.findMany({
+      where: {
+        familyGroupId,
+        pendingApproval: true,
+      },
+      include: { user: { select: { nik: true } } },
+    })
+    return nodes.map((n) => ({
+      id:              n.id,
+      displayName:     n.displayName,
+      gender:          n.gender ?? null,
+      surname:         n.surname ?? null,
+      nik:             n.user?.nik ?? null,
+      birthDate:       n.birthDate?.toISOString() ?? null,
+      birthPlace:      n.birthPlace ?? null,
+      deathDate:       n.deathDate?.toISOString() ?? null,
+      bio:             n.bio ?? null,
+      avatarUrl:       n.avatarUrl ?? null,
+      isDeceased:      n.isDeceased,
+      isPlaceholder:   n.isPlaceholder,
+      pendingApproval: n.pendingApproval,
+      canvasX:         n.canvasX,
+      canvasY:         n.canvasY,
+      userId:          n.userId ?? null,
+      familyGroupId:   n.familyGroupId,
+      createdAt:       n.createdAt.toISOString(),
+      updatedAt:       n.updatedAt.toISOString(),
+    }))
   }
 
   private toUserDto(

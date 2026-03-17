@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common'
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common'
 import type { Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
-import type { PersonNode, CreatePersonNodeDto, UpdatePersonNodeDto, UpdateCanvasPositionDto } from '@genyra/shared-types'
+import type { PersonNode, CreatePersonNodeDto, UpdatePersonNodeDto, UpdateCanvasPositionDto, AddChildDto } from '@genyra/shared-types'
 
 @Injectable()
 export class PersonNodesService {
@@ -107,6 +107,83 @@ export class PersonNodesService {
     await this.prisma.personNode.delete({ where: { id } })
   }
 
+  async addChild(dto: AddChildDto, requestingUserId: string): Promise<PersonNode> {
+    const user = await this.prisma.user.findUnique({
+      where:   { id: requestingUserId },
+      include: { personNode: true },
+    })
+    if (!user?.personNode?.familyGroupId) {
+      throw new ForbiddenException('You must be in a family group to add a child')
+    }
+
+    // Must have a spouse relationship
+    const spouseEdge = await this.prisma.relationshipEdge.findFirst({
+      where: {
+        OR: [
+          { sourceId: user.personNode.id, relationshipType: 'SPOUSE' },
+          { targetId: user.personNode.id, relationshipType: 'SPOUSE' },
+        ],
+      },
+    })
+    if (!spouseEdge) {
+      throw new BadRequestException('You must be married (have a spouse) to add a child')
+    }
+
+    const spouseId = spouseEdge.sourceId === user.personNode.id
+      ? spouseEdge.targetId
+      : spouseEdge.sourceId
+
+    const isFamilyHead  = user.role === 'FAMILY_HEAD'
+    const familyGroupId = user.personNode.familyGroupId
+
+    const child = await this.prisma.personNode.create({
+      data: {
+        displayName:     dto.displayName,
+        gender:          dto.gender ?? null,
+        birthDate:       dto.birthDate ? new Date(dto.birthDate) : null,
+        familyGroupId,
+        pendingApproval: !isFamilyHead,
+      },
+      include: { user: { select: { nik: true } } },
+    })
+
+    await this.prisma.relationshipEdge.createMany({
+      data: [
+        { sourceId: user.personNode.id, targetId: child.id, relationshipType: 'PARENT_CHILD' },
+        { sourceId: spouseId,           targetId: child.id, relationshipType: 'PARENT_CHILD' },
+      ],
+      skipDuplicates: true,
+    })
+
+    return this.toDto(child)
+  }
+
+  async approve(id: string, requestingUserId: string): Promise<PersonNode> {
+    const requestingUser = await this.prisma.user.findUnique({ where: { id: requestingUserId } })
+    if (requestingUser?.role !== 'FAMILY_HEAD') {
+      throw new ForbiddenException('Only Family Head can approve pending members')
+    }
+
+    const node = await this.prisma.personNode.findUnique({ where: { id } })
+    if (!node) throw new NotFoundException('Person node not found')
+
+    const updated = await this.prisma.personNode.update({
+      where: { id },
+      data:  { pendingApproval: false },
+      include: { user: { select: { nik: true } } },
+    })
+
+    // Also activate the linked user if they are pending
+    if (node.userId) {
+      await this.prisma.user.update({
+        where: { id: node.userId },
+        data:  { status: 'ACTIVE' },
+      })
+    }
+
+    return this.toDto(updated)
+  }
+
   private toDto(node: {
     id: string
     displayName: string
@@ -119,6 +196,7 @@ export class PersonNodesService {
     avatarUrl: string | null
     isDeceased: boolean
     isPlaceholder: boolean
+    pendingApproval: boolean
     canvasX: number
     canvasY: number
     userId: string | null
@@ -140,6 +218,7 @@ export class PersonNodesService {
       avatarUrl: node.avatarUrl,
       isDeceased: node.isDeceased,
       isPlaceholder: node.isPlaceholder,
+      pendingApproval: node.pendingApproval,
       canvasX: node.canvasX,
       canvasY: node.canvasY,
       userId: node.userId,

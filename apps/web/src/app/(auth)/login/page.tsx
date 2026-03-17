@@ -14,8 +14,6 @@ export default function LoginPage() {
             alt="Genyra"
             className="h-20 w-20 mx-auto mb-4"
           />
-          <h1 className="text-2xl font-semibold text-slate-800">Welcome back</h1>
-          <p className="text-sm text-slate-500 mt-1">Sign in to your family tree</p>
         </div>
         <LoginForm />
         <p className="text-center text-sm text-slate-500 mt-4">

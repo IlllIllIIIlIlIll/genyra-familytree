@@ -5,7 +5,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
 import { RolesGuard } from '../common/guards/roles.guard'
 import { Roles } from '../common/decorators/roles.decorator'
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator'
-import type { User, MemberStatus } from '@genyra/shared-types'
+import type { User, MemberStatus, PersonNode } from '@genyra/shared-types'
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -18,6 +18,12 @@ export class UsersController {
   @ApiOperation({ summary: 'Get current user profile' })
   async getMe(@CurrentUser() user: JwtPayload): Promise<User> {
     return this.usersService.findById(user.sub)
+  }
+
+  @Get('pending-nodes')
+  @ApiOperation({ summary: 'Get pending person nodes for the requesting user group (Family Head only)' })
+  async pendingNodes(@CurrentUser() user: JwtPayload): Promise<PersonNode[]> {
+    return this.usersService.findPendingNodesByGroup(user.sub)
   }
 
   @Get()
