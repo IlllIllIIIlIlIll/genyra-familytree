@@ -13,6 +13,12 @@ import type { PersonNode, CreatePersonNodeDto, UpdatePersonNodeDto, UpdateCanvas
 export class PersonNodesController {
   constructor(private readonly personNodesService: PersonNodesService) {}
 
+  @Get('unlinked')
+  @ApiOperation({ summary: 'Get unlinked person nodes (no User account) — Family Head only' })
+  async findUnlinked(@CurrentUser() user: JwtPayload): Promise<PersonNode[]> {
+    return this.personNodesService.findUnlinked(user.sub)
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Get a person node by ID' })
   async findOne(@Param('id') id: string): Promise<PersonNode> {

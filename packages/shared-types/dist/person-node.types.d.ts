@@ -212,15 +212,24 @@ export type CreatePersonPhotoDto = z.infer<typeof CreatePersonPhotoSchema>;
 export declare const AddChildSchema: z.ZodObject<{
     displayName: z.ZodString;
     gender: z.ZodOptional<z.ZodEnum<["MALE", "FEMALE"]>>;
-    birthDate: z.ZodOptional<z.ZodString>;
+    surname: z.ZodString;
+    nik: z.ZodString;
+    birthDate: z.ZodString;
+    birthPlace: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     displayName: string;
+    surname: string;
+    nik: string;
+    birthDate: string;
+    birthPlace: string;
     gender?: "MALE" | "FEMALE" | undefined;
-    birthDate?: string | undefined;
 }, {
     displayName: string;
+    surname: string;
+    nik: string;
+    birthDate: string;
+    birthPlace: string;
     gender?: "MALE" | "FEMALE" | undefined;
-    birthDate?: string | undefined;
 }>;
 export type AddChildDto = z.infer<typeof AddChildSchema>;
 //# sourceMappingURL=person-node.types.d.ts.map

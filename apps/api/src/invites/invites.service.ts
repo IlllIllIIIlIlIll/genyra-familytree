@@ -11,44 +11,73 @@ function generateInviteCode(): string {
   return code
 }
 
+async function uniqueCode(prisma: PrismaService): Promise<string> {
+  let code: string
+  let attempts = 0
+  do {
+    code = generateInviteCode()
+    attempts++
+    if (attempts > 10) throw new BadRequestException('Could not generate a unique invite code')
+  } while (await prisma.invite.findUnique({ where: { code } }))
+  return code
+}
+
 @Injectable()
 export class InvitesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async generate(requestingUserId: string): Promise<Invite> {
+  /** Returns the single active invite for the family, creating one if none exists. */
+  async getOrCreateForFamily(requestingUserId: string): Promise<Invite> {
     const user = await this.prisma.user.findUnique({
-      where: { id: requestingUserId },
+      where:   { id: requestingUserId },
       include: { personNode: true },
     })
-    if (user?.role !== 'FAMILY_HEAD') {
-      throw new ForbiddenException('Only Family Head can generate invite codes')
-    }
-    if (!user.personNode?.familyGroupId) {
-      throw new ForbiddenException('User has no family group')
-    }
+    if (user?.role !== 'FAMILY_HEAD') throw new ForbiddenException('Only Family Head can view invite codes')
+    const familyGroupId = user.personNode?.familyGroupId
+    if (!familyGroupId) throw new ForbiddenException('User has no family group')
 
-    const familyGroupId = user.personNode.familyGroupId
+    // Prefer an existing UNUSED invite
+    const existing = await this.prisma.invite.findFirst({
+      where:   { familyGroupId, status: 'UNUSED' },
+      orderBy: { createdAt: 'desc' },
+    })
+    if (existing) return this.toDto(existing)
 
-    let code: string
-    let attempts = 0
-    do {
-      code = generateInviteCode()
-      attempts++
-      if (attempts > 10) throw new Error('Could not generate a unique invite code')
-    } while (await this.prisma.invite.findUnique({ where: { code } }))
+    // Otherwise create a fresh one
+    const code      = await uniqueCode(this.prisma)
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    const invite    = await this.prisma.invite.create({ data: { code, expiresAt, familyGroupId } })
+    return this.toDto(invite)
+  }
 
-    const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + 7)
+  /** Refreshes (or creates) the family invite: new code, reset to UNUSED, +7 day expiry. */
+  async refreshForFamily(requestingUserId: string): Promise<Invite> {
+    const user = await this.prisma.user.findUnique({
+      where:   { id: requestingUserId },
+      include: { personNode: true },
+    })
+    if (user?.role !== 'FAMILY_HEAD') throw new ForbiddenException('Only Family Head can refresh invites')
+    const familyGroupId = user.personNode?.familyGroupId
+    if (!familyGroupId) throw new ForbiddenException('User has no family group')
 
-    const invite = await this.prisma.invite.create({
-      data: {
-        code,
-        expiresAt,
-        familyGroupId,
-      },
+    const code      = await uniqueCode(this.prisma)
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+
+    const existing = await this.prisma.invite.findFirst({
+      where:   { familyGroupId, status: 'UNUSED' },
+      orderBy: { createdAt: 'desc' },
     })
 
-    return this.toDto(invite)
+    if (existing) {
+      const updated = await this.prisma.invite.update({
+        where: { id: existing.id },
+        data:  { code, status: 'UNUSED', expiresAt, usedAt: null },
+      })
+      return this.toDto(updated)
+    }
+
+    const created = await this.prisma.invite.create({ data: { code, expiresAt, familyGroupId } })
+    return this.toDto(created)
   }
 
   async validate(code: string): Promise<{ valid: boolean; familyGroupId?: string }> {
@@ -59,63 +88,18 @@ export class InvitesService {
     return { valid: true, familyGroupId: invite.familyGroupId }
   }
 
-  async listByGroup(familyGroupId: string, requestingUserId: string): Promise<Invite[]> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: requestingUserId },
-      include: { personNode: true },
-    })
-    if (user?.role !== 'FAMILY_HEAD' || user.personNode?.familyGroupId !== familyGroupId) {
-      throw new ForbiddenException('Access denied')
-    }
-
-    const invites = await this.prisma.invite.findMany({
-      where: { familyGroupId },
-      orderBy: { createdAt: 'desc' },
-    })
-    return invites.map((i) => this.toDto(i))
-  }
-
-  async refresh(inviteId: string, requestingUserId: string): Promise<Invite> {
-    const user = await this.prisma.user.findUnique({ where: { id: requestingUserId } })
-    if (user?.role !== 'FAMILY_HEAD') throw new ForbiddenException('Only Family Head can refresh invites')
-
-    let code: string
-    let attempts = 0
-    do {
-      code = generateInviteCode()
-      attempts++
-      if (attempts > 10) throw new BadRequestException('Could not generate unique code')
-    } while (await this.prisma.invite.findUnique({ where: { code } }))
-
-    const invite = await this.prisma.invite.update({
-      where: { id: inviteId },
-      data: {
-        code,
-        status:    'UNUSED',
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        usedAt:    null,
-      },
-    })
-    return this.toDto(invite)
-  }
-
   private toDto(invite: {
-    id: string
-    code: string
-    status: string
-    expiresAt: Date
-    familyGroupId: string
-    createdAt: Date
-    usedAt: Date | null
+    id: string; code: string; status: string; expiresAt: Date
+    familyGroupId: string; createdAt: Date; usedAt: Date | null
   }): Invite {
     void invite.usedAt
     return {
-      id: invite.id,
-      code: invite.code,
-      status: invite.status as Invite['status'],
-      expiresAt: invite.expiresAt.toISOString(),
+      id:            invite.id,
+      code:          invite.code,
+      status:        invite.status as Invite['status'],
+      expiresAt:     invite.expiresAt.toISOString(),
       familyGroupId: invite.familyGroupId,
-      createdAt: invite.createdAt.toISOString(),
+      createdAt:     invite.createdAt.toISOString(),
     }
   }
 }

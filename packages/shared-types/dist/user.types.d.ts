@@ -5,9 +5,9 @@ export declare const UserRoleSchema: z.ZodEnum<["FAMILY_MEMBER", "FAMILY_HEAD"]>
 export type UserRole = z.infer<typeof UserRoleSchema>;
 export declare const MemberStatusSchema: z.ZodEnum<["PENDING_APPROVAL", "ACTIVE", "DEACTIVATED"]>;
 export type MemberStatus = z.infer<typeof MemberStatusSchema>;
-export declare const ReferrerRelationshipSchema: z.ZodEnum<["REFERRER_IS_FATHER", "REFERRER_IS_MOTHER", "REFERRER_IS_SON", "REFERRER_IS_DAUGHTER", "REFERRER_IS_SPOUSE", "REFERRER_IS_SIBLING"]>;
+export declare const ReferrerRelationshipSchema: z.ZodEnum<["REFERRER_IS_FATHER", "REFERRER_IS_SON", "REFERRER_IS_DAUGHTER", "REFERRER_IS_SPOUSE", "REFERRER_IS_SIBLING"]>;
 export type ReferrerRelationship = z.infer<typeof ReferrerRelationshipSchema>;
-export declare const RegisterSchema: z.ZodEffects<z.ZodObject<{
+export declare const RegisterSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
     password: z.ZodString;
     displayName: z.ZodString;
     gender: z.ZodEnum<["MALE", "FEMALE"]>;
@@ -15,10 +15,10 @@ export declare const RegisterSchema: z.ZodEffects<z.ZodObject<{
     nik: z.ZodString;
     birthDate: z.ZodString;
     birthPlace: z.ZodString;
-    inviteCode: z.ZodOptional<z.ZodString>;
-    referrerNik: z.ZodOptional<z.ZodString>;
-    referrerRelationship: z.ZodOptional<z.ZodEnum<["REFERRER_IS_FATHER", "REFERRER_IS_MOTHER", "REFERRER_IS_SON", "REFERRER_IS_DAUGHTER", "REFERRER_IS_SPOUSE", "REFERRER_IS_SIBLING"]>>;
-    familyName: z.ZodOptional<z.ZodString>;
+    inviteCode: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, unknown>;
+    referrerNik: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, unknown>;
+    referrerRelationship: z.ZodOptional<z.ZodEnum<["REFERRER_IS_FATHER", "REFERRER_IS_SON", "REFERRER_IS_DAUGHTER", "REFERRER_IS_SPOUSE", "REFERRER_IS_SIBLING"]>>;
+    familyName: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, unknown>;
 }, "strip", z.ZodTypeAny, {
     password: string;
     displayName: string;
@@ -29,7 +29,7 @@ export declare const RegisterSchema: z.ZodEffects<z.ZodObject<{
     birthPlace: string;
     inviteCode?: string | undefined;
     referrerNik?: string | undefined;
-    referrerRelationship?: "REFERRER_IS_FATHER" | "REFERRER_IS_MOTHER" | "REFERRER_IS_SON" | "REFERRER_IS_DAUGHTER" | "REFERRER_IS_SPOUSE" | "REFERRER_IS_SIBLING" | undefined;
+    referrerRelationship?: "REFERRER_IS_FATHER" | "REFERRER_IS_SON" | "REFERRER_IS_DAUGHTER" | "REFERRER_IS_SPOUSE" | "REFERRER_IS_SIBLING" | undefined;
     familyName?: string | undefined;
 }, {
     password: string;
@@ -39,10 +39,10 @@ export declare const RegisterSchema: z.ZodEffects<z.ZodObject<{
     nik: string;
     birthDate: string;
     birthPlace: string;
-    inviteCode?: string | undefined;
-    referrerNik?: string | undefined;
-    referrerRelationship?: "REFERRER_IS_FATHER" | "REFERRER_IS_MOTHER" | "REFERRER_IS_SON" | "REFERRER_IS_DAUGHTER" | "REFERRER_IS_SPOUSE" | "REFERRER_IS_SIBLING" | undefined;
-    familyName?: string | undefined;
+    inviteCode?: unknown;
+    referrerNik?: unknown;
+    referrerRelationship?: "REFERRER_IS_FATHER" | "REFERRER_IS_SON" | "REFERRER_IS_DAUGHTER" | "REFERRER_IS_SPOUSE" | "REFERRER_IS_SIBLING" | undefined;
+    familyName?: unknown;
 }>, {
     password: string;
     displayName: string;
@@ -53,7 +53,7 @@ export declare const RegisterSchema: z.ZodEffects<z.ZodObject<{
     birthPlace: string;
     inviteCode?: string | undefined;
     referrerNik?: string | undefined;
-    referrerRelationship?: "REFERRER_IS_FATHER" | "REFERRER_IS_MOTHER" | "REFERRER_IS_SON" | "REFERRER_IS_DAUGHTER" | "REFERRER_IS_SPOUSE" | "REFERRER_IS_SIBLING" | undefined;
+    referrerRelationship?: "REFERRER_IS_FATHER" | "REFERRER_IS_SON" | "REFERRER_IS_DAUGHTER" | "REFERRER_IS_SPOUSE" | "REFERRER_IS_SIBLING" | undefined;
     familyName?: string | undefined;
 }, {
     password: string;
@@ -63,10 +63,34 @@ export declare const RegisterSchema: z.ZodEffects<z.ZodObject<{
     nik: string;
     birthDate: string;
     birthPlace: string;
+    inviteCode?: unknown;
+    referrerNik?: unknown;
+    referrerRelationship?: "REFERRER_IS_FATHER" | "REFERRER_IS_SON" | "REFERRER_IS_DAUGHTER" | "REFERRER_IS_SPOUSE" | "REFERRER_IS_SIBLING" | undefined;
+    familyName?: unknown;
+}>, {
+    password: string;
+    displayName: string;
+    gender: "MALE" | "FEMALE";
+    surname: string;
+    nik: string;
+    birthDate: string;
+    birthPlace: string;
     inviteCode?: string | undefined;
     referrerNik?: string | undefined;
-    referrerRelationship?: "REFERRER_IS_FATHER" | "REFERRER_IS_MOTHER" | "REFERRER_IS_SON" | "REFERRER_IS_DAUGHTER" | "REFERRER_IS_SPOUSE" | "REFERRER_IS_SIBLING" | undefined;
+    referrerRelationship?: "REFERRER_IS_FATHER" | "REFERRER_IS_SON" | "REFERRER_IS_DAUGHTER" | "REFERRER_IS_SPOUSE" | "REFERRER_IS_SIBLING" | undefined;
     familyName?: string | undefined;
+}, {
+    password: string;
+    displayName: string;
+    gender: "MALE" | "FEMALE";
+    surname: string;
+    nik: string;
+    birthDate: string;
+    birthPlace: string;
+    inviteCode?: unknown;
+    referrerNik?: unknown;
+    referrerRelationship?: "REFERRER_IS_FATHER" | "REFERRER_IS_SON" | "REFERRER_IS_DAUGHTER" | "REFERRER_IS_SPOUSE" | "REFERRER_IS_SIBLING" | undefined;
+    familyName?: unknown;
 }>;
 export type RegisterDto = z.infer<typeof RegisterSchema>;
 export declare const JoinGroupSchema: z.ZodObject<{

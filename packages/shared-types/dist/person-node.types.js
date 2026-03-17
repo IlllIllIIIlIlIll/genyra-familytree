@@ -61,8 +61,11 @@ exports.CreatePersonPhotoSchema = zod_1.z.object({
     sortOrder: zod_1.z.number().optional().default(0),
 });
 exports.AddChildSchema = zod_1.z.object({
-    displayName: zod_1.z.string().min(1).max(100),
+    displayName: zod_1.z.string().min(1, 'Full name is required').max(100),
     gender: user_types_1.GenderSchema.optional(),
-    birthDate: zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    surname: zod_1.z.string().min(1, 'Nickname is required').max(50).regex(/^\S+$/, 'Nickname must be a single word'),
+    nik: zod_1.z.string().length(16, 'NIK must be exactly 16 digits').regex(/^\d{16}$/, 'NIK must be exactly 16 digits'),
+    birthDate: zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Please enter a valid date'),
+    birthPlace: zod_1.z.string().min(1, 'Place of birth is required').max(100),
 });
 //# sourceMappingURL=person-node.types.js.map

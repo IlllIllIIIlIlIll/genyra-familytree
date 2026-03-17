@@ -12,6 +12,12 @@ function AuthPageContent() {
   const [mode, setMode] = useState<'login' | 'register'>(
     params.get('tab') === 'register' ? 'register' : 'login',
   )
+  const [pendingApproval, setPendingApproval] = useState(false)
+
+  const handleRegisterSuccess = (usedInvite: boolean) => {
+    setMode('login')
+    setPendingApproval(usedInvite)
+  }
 
   return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-brand-50">
@@ -28,10 +34,20 @@ function AuthPageContent() {
           )}
         </div>
 
+        {/* Pending approval notice */}
+        {mode === 'login' && pendingApproval && (
+          <div className="mb-5 bg-brand-50 border border-brand-200 rounded-xl px-4 py-3 text-center">
+            <p className="text-sm font-medium text-brand-700">Registration submitted!</p>
+            <p className="text-xs text-brand-500 mt-0.5">
+              Waiting for the Family Head to approve your request.
+            </p>
+          </div>
+        )}
+
         {/* Form */}
         {mode === 'login'
           ? <LoginForm />
-          : <RegisterForm onSuccess={() => setMode('login')} />
+          : <RegisterForm onSuccess={handleRegisterSuccess} />
         }
 
         {/* Toggle link */}
@@ -41,7 +57,7 @@ function AuthPageContent() {
               New family member?{' '}
               <button
                 type="button"
-                onClick={() => setMode('register')}
+                onClick={() => { setMode('register'); setPendingApproval(false) }}
                 className="text-brand-600 font-medium hover:underline"
               >
                 Register here

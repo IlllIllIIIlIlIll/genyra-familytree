@@ -216,6 +216,23 @@ export class FamilyGroupsService {
     return { familyName: group?.name ?? 'Family', nodes, edges }
   }
 
+  async updateName(id: string, name: string, requestingUserId: string): Promise<FamilyGroup> {
+    const user = await this.prisma.user.findUnique({
+      where:   { id: requestingUserId },
+      include: { personNode: true },
+    })
+    if (user?.role !== 'FAMILY_HEAD' || user.personNode?.familyGroupId !== id) {
+      throw new ForbiddenException('Only the Family Head can update the family name')
+    }
+    const trimmed = name.trim()
+    if (!trimmed) throw new BadRequestException('Family name cannot be empty')
+    const group = await this.prisma.familyGroup.update({
+      where: { id },
+      data:  { name: trimmed },
+    })
+    return this.toFamilyGroupDto(group)
+  }
+
   private toFamilyGroupDto(group: {
     id: string
     name: string

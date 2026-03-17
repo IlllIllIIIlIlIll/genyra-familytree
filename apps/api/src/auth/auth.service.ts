@@ -18,7 +18,12 @@ export class AuthService {
 
   async register(dto: RegisterDto): Promise<{ message: string }> {
     const existingNik = await this.prisma.user.findUnique({ where: { nik: dto.nik } })
-    if (existingNik) throw new BadRequestException('NIK already registered')
+    if (existingNik) {
+      if (existingNik.status === 'PENDING_APPROVAL') {
+        throw new BadRequestException('This NIK has already submitted a registration and is waiting for approval')
+      }
+      throw new BadRequestException('This NIK is already registered')
+    }
 
     const passwordHash = await argon2.hash(dto.password)
     const birthDate    = new Date(dto.birthDate)

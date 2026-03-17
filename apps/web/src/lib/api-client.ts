@@ -226,9 +226,27 @@ export const apiClient = {
     return data
   },
 
-  // Refresh an invite (generates new code, resets expiry)
-  refreshInvite: async (inviteId: string): Promise<Invite> => {
-    const { data } = await http.patch<Invite>(`/invites/${inviteId}/refresh`)
+  // Get person nodes with no linked User account (Family Head only)
+  getUnlinkedNodes: async (): Promise<PersonNode[]> => {
+    const { data } = await http.get<PersonNode[]>('/person-nodes/unlinked')
+    return data
+  },
+
+  // Invite — single family invite (get or create)
+  getFamilyInvite: async (): Promise<Invite> => {
+    const { data } = await http.get<Invite>('/invites/my-family')
+    return data
+  },
+
+  // Refresh the family invite code
+  refreshFamilyInvite: async (): Promise<Invite> => {
+    const { data } = await http.patch<Invite>('/invites/my-family/refresh')
+    return data
+  },
+
+  // Update family name (Family Head only)
+  updateFamilyName: async (familyGroupId: string, name: string): Promise<FamilyGroup> => {
+    const { data } = await http.patch<FamilyGroup>(`/family-groups/${familyGroupId}/name`, { name })
     return data
   },
 }

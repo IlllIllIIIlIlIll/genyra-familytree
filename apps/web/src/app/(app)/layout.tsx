@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
-import { useAuthStore } from '@/store/map-store'
+import { useAuthStore, useMapUIStore } from '@/store/map-store'
 import { cn } from '@/lib/utils'
 
 function MapIcon() {
@@ -28,17 +28,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router   = useRouter()
   const pathname = usePathname()
 
-  const accessToken   = useAuthStore((s) => s.accessToken)
-  const familyGroupId = useAuthStore((s) => s.familyGroupId)
-  const role          = useAuthStore((s) => s.role)
+  const accessToken        = useAuthStore((s) => s.accessToken)
+  const familyGroupId      = useAuthStore((s) => s.familyGroupId)
+  const role               = useAuthStore((s) => s.role)
+  const isProfilePanelOpen = useMapUIStore((s) => s.isProfilePanelOpen)
+  const isCleanView        = useMapUIStore((s) => s.isCleanView)
 
   const isSetupPage   = pathname === '/setup'
   const isJoinPage    = pathname === '/join'
   const isOnboarding  = isSetupPage || isJoinPage
   const isFamilyHead  = role === 'FAMILY_HEAD'
 
-  // Show bottom nav only on main app pages (not onboarding)
-  const showNav = !!familyGroupId && !isOnboarding
+  // Nav visible only for FAMILY_HEAD on main app pages, hidden in clean view or when profile is open
+  const showNav = isFamilyHead && !!familyGroupId && !isOnboarding && !isCleanView && !isProfilePanelOpen
 
   useEffect(() => {
     if (!accessToken) {
@@ -56,12 +58,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {children}
 
       {showNav && (
-        <nav className="fixed bottom-0 inset-x-0 z-[9990] flex items-center justify-around bg-white/90 backdrop-blur border-t border-stone-200 safe-area-pb"
+        <nav className="fixed bottom-0 inset-x-0 z-[9990] flex items-center justify-around bg-white/95 backdrop-blur border-t border-stone-200"
              style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <Link
             href="/map"
             className={cn(
-              'flex flex-col items-center gap-0.5 px-6 py-3 text-xs font-medium transition-colors',
+              'flex flex-col items-center gap-0.5 px-8 py-3 text-xs font-medium transition-colors',
               pathname === '/map' ? 'text-brand-600' : 'text-slate-400 hover:text-slate-600',
             )}
           >
@@ -69,18 +71,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <span>Map</span>
           </Link>
 
-          {isFamilyHead && (
-            <Link
-              href="/admin/approvals"
-              className={cn(
-                'flex flex-col items-center gap-0.5 px-6 py-3 text-xs font-medium transition-colors',
-                pathname.startsWith('/admin') ? 'text-brand-600' : 'text-slate-400 hover:text-slate-600',
-              )}
-            >
-              <ShieldIcon />
-              <span>Admin</span>
-            </Link>
-          )}
+          <Link
+            href="/admin"
+            className={cn(
+              'flex flex-col items-center gap-0.5 px-8 py-3 text-xs font-medium transition-colors',
+              pathname.startsWith('/admin') ? 'text-brand-600' : 'text-slate-400 hover:text-slate-600',
+            )}
+          >
+            <ShieldIcon />
+            <span>Admin</span>
+          </Link>
         </nav>
       )}
     </div>

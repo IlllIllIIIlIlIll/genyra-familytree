@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useRouter } from 'next/navigation'
 import { useMutation } from '@tanstack/react-query'
 import { RegisterSchema, type RegisterDto, type ReferrerRelationship } from '@genyra/shared-types'
 import { apiClient } from '@/lib/api-client'
@@ -16,7 +15,6 @@ type Mode = 'join' | 'create'
 
 const RELATIONSHIP_OPTIONS: { value: ReferrerRelationship; label: string }[] = [
   { value: 'REFERRER_IS_FATHER',   label: 'They are my father'  },
-  { value: 'REFERRER_IS_MOTHER',   label: 'They are my mother'  },
   { value: 'REFERRER_IS_SON',      label: 'They are my son'     },
   { value: 'REFERRER_IS_DAUGHTER', label: 'They are my daughter'},
   { value: 'REFERRER_IS_SPOUSE',   label: 'They are my spouse'  },
@@ -28,7 +26,6 @@ interface Props {
 }
 
 export function RegisterForm({ onSuccess }: Props) {
-  const router  = useRouter()
   const [mode, setMode] = useState<Mode>('join')
 
   const {
@@ -50,11 +47,7 @@ export function RegisterForm({ onSuccess }: Props) {
   const registerMutation = useMutation({
     mutationFn: apiClient.register,
     onSuccess: (_data, variables) => {
-      if (variables.inviteCode) {
-        router.push('/pending-approval')
-      } else {
-        onSuccess?.(false)
-      }
+      onSuccess?.(!!variables.inviteCode)
     },
     onError: (error: { response?: { data?: { message?: string } } }) => {
       const message = error.response?.data?.message ?? 'Registration failed'

@@ -12,7 +12,6 @@ export type MemberStatus = z.infer<typeof MemberStatusSchema>
 // From the registrant's perspective: what is the referrer to them?
 export const ReferrerRelationshipSchema = z.enum([
   'REFERRER_IS_FATHER',
-  'REFERRER_IS_MOTHER',
   'REFERRER_IS_SON',
   'REFERRER_IS_DAUGHTER',
   'REFERRER_IS_SPOUSE',
@@ -29,11 +28,14 @@ export const RegisterSchema = z.object({
   birthDate:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Please enter a valid date'),
   birthPlace:           z.string().min(1, 'Place of birth is required').max(100),
   // join path
-  inviteCode:           z.string().optional(),
-  referrerNik:          z.string().length(16, 'NIK must be exactly 16 digits').regex(/^\d{16}$/, 'NIK must be exactly 16 digits').optional(),
+  inviteCode:           z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
+  referrerNik:          z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.string().length(16, 'NIK must be exactly 16 digits').regex(/^\d{16}$/, 'NIK must be exactly 16 digits').optional(),
+  ),
   referrerRelationship: ReferrerRelationshipSchema.optional(),
   // create path
-  familyName:           z.string().min(1).max(100).optional(),
+  familyName:           z.preprocess((v) => (v === '' ? undefined : v), z.string().min(1).max(100).optional()),
 }).refine(
   (d) => !!(d.inviteCode ?? d.familyName),
   { message: 'Either an invite code or a family name is required', path: ['inviteCode'] },

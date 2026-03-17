@@ -138,10 +138,14 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   const router        = useRouter()
   const clearAuth     = useAuthStore((s) => s.clear)
   const currentUserId = useAuthStore((s) => s.userId)
+  const role          = useAuthStore((s) => s.role)
+  const isFamilyHead  = role === 'FAMILY_HEAD'
   const canvasRef     = useRef<HTMLDivElement>(null)
   const longPressTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressNodeId = useRef<string | null>(null)
-  const [minimapSize, setMinimapSize] = useState(getMinimapSize)
+  const [minimapSize, setMinimapSize]     = useState(getMinimapSize)
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [nameDraft, setNameDraft]         = useState('')
 
   useEffect(() => {
     const update = () => setMinimapSize(getMinimapSize())
@@ -294,6 +298,20 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
     [cancelLongPress, openProfilePanel, getNode, setCenter],
   )
 
+  const updateNameMutation = useMutation({
+    mutationFn: (name: string) => apiClient.updateFamilyName(familyGroupId, name),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['map-data', familyGroupId] })
+      setIsEditingName(false)
+    },
+  })
+
+  const handleNameSave = useCallback(() => {
+    const trimmed = nameDraft.trim()
+    if (!trimmed || trimmed === mapData?.familyName) { setIsEditingName(false); return }
+    updateNameMutation.mutate(trimmed)
+  }, [nameDraft, mapData?.familyName, updateNameMutation])
+
   const handleLogout = useCallback(() => {
     clearAuth()
     router.push('/login')
@@ -403,23 +421,53 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   return (
     // touch-action: none overrides `html { touch-action: manipulation }` in globals.css
     // which would otherwise swallow React Flow's pointer drag events on touch screens.
-    <div className="flex-1 flex flex-col pb-14" style={{ touchAction: 'none' }}>
+    <div className={`flex-1 flex flex-col ${isFamilyHead ? 'pb-14' : ''}`} style={{ touchAction: 'none' }}>
 
       {/* ── Family header bar (hidden in clean view) ────────────────────────── */}
       {!isCleanView && (
         <header className="flex items-center justify-between px-4 py-2 bg-white/90 backdrop-blur-sm border-b border-stone-200 shrink-0 z-20">
-          <div className="flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-brand-400">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-brand-400 shrink-0">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
               <circle cx="9" cy="7" r="4" />
               <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
               <path d="M16 3.13a4 4 0 0 1 0 7.75" />
             </svg>
-            <span className="text-sm font-semibold text-slate-700">
-              {mapData?.familyName ?? 'Family Map'}
-            </span>
+            {isEditingName ? (
+              <div className="flex items-center gap-1 flex-1">
+                <input
+                  autoFocus
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleNameSave()
+                    if (e.key === 'Escape') setIsEditingName(false)
+                  }}
+                  onBlur={handleNameSave}
+                  className="text-sm font-semibold text-slate-700 bg-stone-100 rounded-lg px-2 py-0.5 flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-brand-400"
+                />
+              </div>
+            ) : (
+              <>
+                <span className="text-sm font-semibold text-slate-700 truncate">
+                  {mapData?.familyName ?? 'Family Map'}
+                </span>
+                {isFamilyHead && (
+                  <button
+                    onClick={() => { setNameDraft(mapData?.familyName ?? ''); setIsEditingName(true) }}
+                    className="p-1 rounded text-slate-300 hover:text-slate-500 transition-colors shrink-0"
+                    title="Edit family name"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  </button>
+                )}
+              </>
+            )}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             <button
               onClick={handleDownload}
               className="p-2 rounded-lg text-slate-500 hover:bg-stone-100 transition-colors"

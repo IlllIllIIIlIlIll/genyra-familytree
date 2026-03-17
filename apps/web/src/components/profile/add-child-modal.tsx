@@ -103,14 +103,14 @@ export function AddChildModal({ onClose }: Props) {
           <Input
             id="birthDate"
             type="date"
-            label="Date of Birth (optional)"
+            label="Date of Birth"
             {...register('birthDate')}
             error={errors.birthDate?.message}
           />
 
           <Input
             id="birthPlace"
-            label="Place of Birth (optional)"
+            label="Place of Birth"
             placeholder="Jakarta"
             {...register('birthPlace')}
             error={errors.birthPlace?.message}

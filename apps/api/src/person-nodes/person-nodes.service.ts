@@ -107,6 +107,28 @@ export class PersonNodesService {
     await this.prisma.personNode.delete({ where: { id } })
   }
 
+  /** Nodes with no linked User account (created by old addChild or similar) — Family Head only. */
+  async findUnlinked(requestingUserId: string): Promise<PersonNode[]> {
+    const user = await this.prisma.user.findUnique({
+      where:   { id: requestingUserId },
+      include: { personNode: { select: { familyGroupId: true } } },
+    })
+    if (user?.role !== 'FAMILY_HEAD') return []
+    const familyGroupId = user.personNode?.familyGroupId
+    if (!familyGroupId) return []
+
+    const nodes = await this.prisma.personNode.findMany({
+      where: {
+        familyGroupId,
+        userId:          null,
+        isPlaceholder:   false,
+        pendingApproval: false,
+      },
+      include: { user: { select: { nik: true } } },
+    })
+    return nodes.map((n) => this.toDto(n))
+  }
+
   async addChild(dto: AddChildDto, requestingUserId: string): Promise<PersonNode> {
     const user = await this.prisma.user.findUnique({
       where:   { id: requestingUserId },

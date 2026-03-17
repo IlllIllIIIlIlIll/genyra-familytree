@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common'
+import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { FamilyGroupsService } from './family-groups.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
@@ -53,6 +53,16 @@ export class FamilyGroupsController {
   @ApiOperation({ summary: 'Get family group info' })
   async findOne(@Param('id') id: string): Promise<FamilyGroup> {
     return this.familyGroupsService.findById(id)
+  }
+
+  @Patch(':id/name')
+  @ApiOperation({ summary: 'Update the family name (Family Head only)' })
+  async updateName(
+    @Param('id') id: string,
+    @Body() body: { name: string },
+    @CurrentUser() user: JwtPayload,
+  ): Promise<FamilyGroup> {
+    return this.familyGroupsService.updateName(id, body.name, user.sub)
   }
 
   @Get(':id/map-data')
