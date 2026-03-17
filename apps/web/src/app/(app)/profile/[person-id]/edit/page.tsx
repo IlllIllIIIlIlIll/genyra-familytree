@@ -26,12 +26,6 @@ const EditSchema = z.object({
   deathDate:   z.string().optional(),
   birthPlace:  z.string().max(MAX_CHARS.BIRTH_PLACE, `Max ${MAX_CHARS.BIRTH_PLACE} characters`).optional(),
   bio:         z.string().max(MAX_CHARS.BIO, `Max ${MAX_CHARS.BIO} characters`).optional(),
-  nik:         z
-    .string()
-    .length(16, 'NIK must be exactly 16 digits')
-    .regex(/^\d{16}$/, 'NIK must contain only digits')
-    .optional()
-    .or(z.literal('')),
   isDeceased:  z.boolean().optional(),
 })
 
@@ -50,6 +44,8 @@ export default function EditProfilePage() {
   const router        = useRouter()
   const personId      = params['person-id'] as string
   const familyGroupId = useAuthStore((s) => s.familyGroupId)
+  const authUserId    = useAuthStore((s) => s.userId)
+  const role          = useAuthStore((s) => s.role)
   const toast         = useToastStore((s) => s.toast)
   const queryClient   = useQueryClient()
 
@@ -88,7 +84,6 @@ export default function EditProfilePage() {
       deathDate:   toDateInput(node.deathDate),
       birthPlace:  node.birthPlace ?? '',
       bio:         node.bio ?? '',
-      nik:         node.nik ?? '',
       isDeceased:  node.isDeceased,
     })
   }, [node, reset])
@@ -103,7 +98,6 @@ export default function EditProfilePage() {
         deathDate:   values.deathDate ? new Date(values.deathDate).toISOString() : null,
         birthPlace:  values.birthPlace || null,
         bio:         values.bio || null,
-        nik:         values.nik || null,
         isDeceased:  values.isDeceased ?? false,
         // data URL stored directly in DB — only include when a new avatar was cropped
         ...(pendingAvatar !== null && { avatarUrl: pendingAvatar }),
@@ -156,6 +150,22 @@ export default function EditProfilePage() {
       <div className="flex-1 flex flex-col items-center justify-center gap-4 bg-stone-50 p-8">
         <p className="text-slate-400">Person not found.</p>
         <Button variant="secondary" onClick={() => router.back()}>Back</Button>
+      </div>
+    )
+  }
+
+  const canEdit = node.userId === authUserId || role === 'FAMILY_HEAD'
+
+  if (!canEdit) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-stone-50 p-8 text-center">
+        <p className={cn(FONT.HEADING_SM, 'font-semibold text-slate-400')}>Not your profile</p>
+        <p className={cn(FONT.BODY, 'text-slate-300 max-w-xs')}>
+          You can only edit your own profile.
+        </p>
+        <Button variant="secondary" onClick={() => router.back()} className="mt-2">
+          Go back
+        </Button>
       </div>
     )
   }
@@ -374,19 +384,6 @@ export default function EditProfilePage() {
             />
             {errors.bio && <p className="text-xs text-red-500">{errors.bio.message}</p>}
           </div>
-        </Section>
-
-        {/* Identity */}
-        <Section title="Identity">
-          <Input
-            id="nik"
-            label="NIK (16 digits)"
-            placeholder="3273011206680016"
-            inputMode="numeric"
-            maxLength={16}
-            error={errors.nik?.message}
-            {...register('nik')}
-          />
         </Section>
 
       </form>

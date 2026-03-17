@@ -74,7 +74,7 @@ export function RegisterForm() {
       {/* Surname */}
       <Input
         id="surname"
-        label="Surname / Family Name"
+        label="Surname"
         placeholder="Santoso"
         autoComplete="family-name"
         maxLength={MAX_CHARS.SURNAME}

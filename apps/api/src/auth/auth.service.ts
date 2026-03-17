@@ -37,7 +37,6 @@ export class AuthService {
             displayName: dto.displayName,
             surname: dto.surname,
             gender: dto.gender,
-            nik: dto.nik,
             birthDate,
             birthPlace: dto.birthPlace,
           },

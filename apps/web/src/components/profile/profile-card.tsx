@@ -63,11 +63,6 @@ export function ProfileCard({ node }: ProfileCardProps) {
           View Full Profile
         </Button>
       </div>
-
-      {/* Coming-soon features teaser */}
-      <p className={cn(FONT.NODE_BADGE, 'text-center text-slate-300 tracking-wide uppercase')}>
-        Photos · Timeline · Family tree export — more to add soon
-      </p>
     </div>
   )
 }

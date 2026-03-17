@@ -76,7 +76,6 @@ model PersonNode {
   displayName   String
   gender        Gender?
   surname       String?
-  nik           String?   @unique
   birthDate     DateTime?
   birthPlace    String?
   deathDate     DateTime?

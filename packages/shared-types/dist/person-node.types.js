@@ -27,7 +27,6 @@ exports.CreatePersonNodeSchema = zod_1.z.object({
     displayName: zod_1.z.string().min(1).max(100),
     gender: user_types_1.GenderSchema.optional().nullable(),
     surname: zod_1.z.string().max(50).optional().nullable(),
-    nik: zod_1.z.string().length(16).regex(/^\d{16}$/, 'NIK must be 16 digits').optional().nullable(),
     birthDate: zod_1.z.string().datetime().optional().nullable(),
     birthPlace: zod_1.z.string().max(100).optional().nullable(),
     deathDate: zod_1.z.string().datetime().optional().nullable(),

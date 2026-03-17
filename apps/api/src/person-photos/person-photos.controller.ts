@@ -39,7 +39,7 @@ export class PersonPhotosController {
   @ApiOperation({ summary: 'Upload a photo (base64 data URL stored in DB)' })
   async upload(
     @Body() body: unknown,
-    @CurrentUser() _user: JwtPayload,
+    @CurrentUser() user: JwtPayload,
   ): Promise<PersonPhoto> {
     const result = UploadPhotoSchema.safeParse(body)
     if (!result.success) throw new BadRequestException(result.error.message)
@@ -49,7 +49,7 @@ export class PersonPhotosController {
       url:     dataUrl,
       caption: caption ?? null,
       takenAt: takenAt ?? null,
-    })
+    }, user.sub)
   }
 
   @Delete('person-photos/:id')

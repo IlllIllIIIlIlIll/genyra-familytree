@@ -62,7 +62,6 @@ export declare const CreatePersonNodeSchema: z.ZodObject<{
     displayName: z.ZodString;
     gender: z.ZodNullable<z.ZodOptional<z.ZodEnum<["MALE", "FEMALE"]>>>;
     surname: z.ZodNullable<z.ZodOptional<z.ZodString>>;
-    nik: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     birthDate: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     birthPlace: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     deathDate: z.ZodNullable<z.ZodOptional<z.ZodString>>;
@@ -81,7 +80,6 @@ export declare const CreatePersonNodeSchema: z.ZodObject<{
     canvasY: number;
     gender?: "MALE" | "FEMALE" | null | undefined;
     surname?: string | null | undefined;
-    nik?: string | null | undefined;
     birthDate?: string | null | undefined;
     birthPlace?: string | null | undefined;
     deathDate?: string | null | undefined;
@@ -92,7 +90,6 @@ export declare const CreatePersonNodeSchema: z.ZodObject<{
     displayName: string;
     gender?: "MALE" | "FEMALE" | null | undefined;
     surname?: string | null | undefined;
-    nik?: string | null | undefined;
     birthDate?: string | null | undefined;
     birthPlace?: string | null | undefined;
     deathDate?: string | null | undefined;
@@ -109,7 +106,6 @@ export declare const UpdatePersonNodeSchema: z.ZodObject<{
     displayName: z.ZodOptional<z.ZodString>;
     gender: z.ZodOptional<z.ZodNullable<z.ZodOptional<z.ZodEnum<["MALE", "FEMALE"]>>>>;
     surname: z.ZodOptional<z.ZodNullable<z.ZodOptional<z.ZodString>>>;
-    nik: z.ZodOptional<z.ZodNullable<z.ZodOptional<z.ZodString>>>;
     birthDate: z.ZodOptional<z.ZodNullable<z.ZodOptional<z.ZodString>>>;
     birthPlace: z.ZodOptional<z.ZodNullable<z.ZodOptional<z.ZodString>>>;
     deathDate: z.ZodOptional<z.ZodNullable<z.ZodOptional<z.ZodString>>>;
@@ -124,7 +120,6 @@ export declare const UpdatePersonNodeSchema: z.ZodObject<{
     displayName?: string | undefined;
     gender?: "MALE" | "FEMALE" | null | undefined;
     surname?: string | null | undefined;
-    nik?: string | null | undefined;
     birthDate?: string | null | undefined;
     birthPlace?: string | null | undefined;
     deathDate?: string | null | undefined;
@@ -139,7 +134,6 @@ export declare const UpdatePersonNodeSchema: z.ZodObject<{
     displayName?: string | undefined;
     gender?: "MALE" | "FEMALE" | null | undefined;
     surname?: string | null | undefined;
-    nik?: string | null | undefined;
     birthDate?: string | null | undefined;
     birthPlace?: string | null | undefined;
     deathDate?: string | null | undefined;

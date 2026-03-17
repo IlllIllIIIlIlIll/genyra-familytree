@@ -168,7 +168,10 @@ export class FamilyGroupsService {
       this.prisma.familyGroup.findUnique({ where: { id: groupId } }),
       this.prisma.personNode.findMany({
         where: { familyGroupId: groupId },
-        include: { photos: { orderBy: { sortOrder: 'asc' }, take: 1 } },
+        include: {
+          photos: { orderBy: { sortOrder: 'asc' }, take: 1 },
+          user:   { select: { nik: true } },
+        },
       }),
       this.prisma.relationshipEdge.findMany({
         where: {
@@ -182,7 +185,7 @@ export class FamilyGroupsService {
       displayName: n.displayName,
       gender: n.gender ?? null,
       surname: n.surname ?? null,
-      nik: n.nik ?? null,
+      nik: n.user?.nik ?? null,
       birthDate: n.birthDate?.toISOString() ?? null,
       birthPlace: n.birthPlace ?? null,
       deathDate: n.deathDate?.toISOString() ?? null,

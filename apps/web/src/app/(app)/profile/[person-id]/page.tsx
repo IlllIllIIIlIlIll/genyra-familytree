@@ -24,6 +24,8 @@ export default function ProfilePage() {
   const router        = useRouter()
   const personId      = params['person-id'] as string
   const familyGroupId = useAuthStore((s) => s.familyGroupId)
+  const authUserId    = useAuthStore((s) => s.userId)
+  const role          = useAuthStore((s) => s.role)
   const toast         = useToastStore((s) => s.toast)
   const queryClient   = useQueryClient()
 
@@ -105,6 +107,8 @@ export default function ProfilePage() {
     )
   }
 
+  const canEditPhotos = node.userId === authUserId || role === 'FAMILY_HEAD'
+
   const birthYear = node.birthDate ? new Date(node.birthDate).getFullYear() : null
   const deathYear = node.deathDate ? new Date(node.deathDate).getFullYear() : null
 
@@ -131,22 +135,25 @@ export default function ProfilePage() {
           className="fixed inset-0 z-[9997] bg-black/90 flex flex-col"
           onClick={() => setLightbox(null)}
         >
-          <div className="flex items-center justify-end px-4 py-3 shrink-0" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              onClick={() => deleteMutation.mutate(lightbox.id)}
-              disabled={deleteMutation.isPending}
-              className="text-red-400 hover:text-red-300 text-sm font-semibold disabled:opacity-40"
-            >
-              {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
-            </button>
+          <div className="flex items-center justify-end px-4 py-3 shrink-0">
+            {canEditPhotos && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(lightbox.id) }}
+                disabled={deleteMutation.isPending}
+                className="text-red-400 hover:text-red-300 text-sm font-semibold disabled:opacity-40"
+              >
+                {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+              </button>
+            )}
           </div>
-          <div className="flex-1 flex items-center justify-center p-4 min-h-0" onClick={(e) => e.stopPropagation()}>
+          <div className="flex-1 flex items-center justify-center p-4 min-h-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={resolveUrl(lightbox.url)}
               alt={lightbox.caption ?? 'Memory photo'}
-              className="max-h-full max-w-full object-contain rounded-xl"
+              onClick={(e) => e.stopPropagation()}
+              className="max-h-full max-w-full object-contain rounded-xl cursor-default"
             />
           </div>
           {lightbox.caption && (
@@ -236,17 +243,19 @@ export default function ProfilePage() {
               <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
                 Memories{photos.length > 0 ? ` · ${photos.length}` : ''}
               </p>
-              <button
-                type="button"
-                onClick={() => photoInputRef.current?.click()}
-                disabled={uploadMutation.isPending}
-                className="flex items-center gap-1 text-xs font-medium text-brand-500 hover:text-brand-600 disabled:opacity-40 transition-colors"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-                  <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
-                </svg>
-                {uploadMutation.isPending ? 'Uploading…' : 'Add photo'}
-              </button>
+              {canEditPhotos && (
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={uploadMutation.isPending}
+                  className="flex items-center gap-1 text-xs font-medium text-brand-500 hover:text-brand-600 disabled:opacity-40 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                    <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+                  </svg>
+                  {uploadMutation.isPending ? 'Uploading…' : 'Add photo'}
+                </button>
+              )}
               <input
                 ref={photoInputRef}
                 type="file"
@@ -257,16 +266,25 @@ export default function ProfilePage() {
             </div>
 
             {photos.length === 0 ? (
-              <button
-                type="button"
-                onClick={() => photoInputRef.current?.click()}
-                className="w-full flex flex-col items-center justify-center gap-2 py-8 text-slate-300 hover:text-slate-400 transition-colors"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-8 h-8">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 3h18M3 21h18M6.75 6.75h.008v.008H6.75V6.75Z" />
-                </svg>
-                <p className="text-sm">Add your first memory photo</p>
-              </button>
+              canEditPhotos ? (
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  className="w-full flex flex-col items-center justify-center gap-2 py-8 text-slate-300 hover:text-slate-400 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-8 h-8">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 3h18M3 21h18M6.75 6.75h.008v.008H6.75V6.75Z" />
+                  </svg>
+                  <p className="text-sm">Add your first memory photo</p>
+                </button>
+              ) : (
+                <div className="w-full flex flex-col items-center justify-center gap-2 py-8 text-slate-200">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="w-8 h-8">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3 3h18M3 21h18M6.75 6.75h.008v.008H6.75V6.75Z" />
+                  </svg>
+                  <p className="text-sm">No memories yet</p>
+                </div>
+              )
             ) : (
               <div className="grid grid-cols-3 gap-0.5 p-0.5">
                 {photos.map((photo) => (
@@ -284,17 +302,19 @@ export default function ProfilePage() {
                     />
                   </button>
                 ))}
-                {/* Add tile */}
-                <button
-                  type="button"
-                  onClick={() => photoInputRef.current?.click()}
-                  disabled={uploadMutation.isPending}
-                  className="aspect-square flex items-center justify-center bg-stone-50 hover:bg-stone-100 text-slate-300 hover:text-slate-400 transition-colors disabled:opacity-40"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-6 h-6">
-                    <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
-                  </svg>
-                </button>
+                {/* Add tile — only for owners */}
+                {canEditPhotos && (
+                  <button
+                    type="button"
+                    onClick={() => photoInputRef.current?.click()}
+                    disabled={uploadMutation.isPending}
+                    className="aspect-square flex items-center justify-center bg-stone-50 hover:bg-stone-100 text-slate-300 hover:text-slate-400 transition-colors disabled:opacity-40"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-6 h-6">
+                      <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+                    </svg>
+                  </button>
+                )}
               </div>
             )}
           </div>

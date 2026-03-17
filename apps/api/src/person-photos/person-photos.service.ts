@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common'
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import type { PersonPhoto } from '@genyra/shared-types'
 
@@ -14,13 +14,30 @@ export class PersonPhotosService {
     return photos.map(this.toDto)
   }
 
-  async create(data: {
-    personNodeId: string
-    url: string
-    caption?: string | null
-    takenAt?: string | null
-    sortOrder?: number
-  }): Promise<PersonPhoto> {
+  async create(
+    data: {
+      personNodeId: string
+      url: string
+      caption?: string | null
+      takenAt?: string | null
+      sortOrder?: number
+    },
+    requestingUserId: string,
+  ): Promise<PersonPhoto> {
+    const PHOTO_LIMIT = 20
+    const count = await this.prisma.personPhoto.count({ where: { personNodeId: data.personNodeId } })
+    if (count >= PHOTO_LIMIT) {
+      throw new BadRequestException(`Photo limit reached (max ${PHOTO_LIMIT} per person)`)
+    }
+
+    const personNode = await this.prisma.personNode.findUnique({ where: { id: data.personNodeId } })
+    if (!personNode) throw new NotFoundException('Person not found')
+
+    const user = await this.prisma.user.findUnique({ where: { id: requestingUserId } })
+    const isSelf = personNode.userId === requestingUserId
+    const isFamilyHead = user?.role === 'FAMILY_HEAD'
+    if (!isSelf && !isFamilyHead) throw new ForbiddenException('You can only add photos to your own profile')
+
     const photo = await this.prisma.personPhoto.create({
       data: {
         personNodeId: data.personNodeId,

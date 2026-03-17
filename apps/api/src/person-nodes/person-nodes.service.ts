@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException } from '@nestjs/common'
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common'
 import type { Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import type { PersonNode, CreatePersonNodeDto, UpdatePersonNodeDto, UpdateCanvasPositionDto } from '@genyra/shared-types'
@@ -8,7 +8,10 @@ export class PersonNodesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findById(id: string): Promise<PersonNode> {
-    const node = await this.prisma.personNode.findUnique({ where: { id } })
+    const node = await this.prisma.personNode.findUnique({
+      where: { id },
+      include: { user: { select: { nik: true } } },
+    })
     if (!node) throw new NotFoundException('Person node not found')
     return this.toDto(node)
   }
@@ -25,36 +28,26 @@ export class PersonNodesService {
   }
 
   async create(dto: CreatePersonNodeDto, familyGroupId: string): Promise<PersonNode> {
-    try {
-      const node = await this.prisma.personNode.create({
-        data: {
-          displayName: dto.displayName,
-          gender: dto.gender ?? null,
-          surname: dto.surname ?? null,
-          nik: dto.nik ?? null,
-          birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
-          birthPlace: dto.birthPlace ?? null,
-          deathDate: dto.deathDate ? new Date(dto.deathDate) : null,
-          bio: dto.bio ?? null,
-          avatarUrl: dto.avatarUrl ?? null,
-          isDeceased: dto.isDeceased ?? false,
-          isPlaceholder: dto.isPlaceholder ?? false,
-          canvasX: dto.canvasX ?? 0,
-          canvasY: dto.canvasY ?? 0,
-          userId: dto.userId ?? null,
-          familyGroupId,
-        },
-      })
-      return this.toDto(node)
-    } catch (e: unknown) {
-      if (
-        typeof e === 'object' && e !== null &&
-        'code' in e && (e as { code: string }).code === 'P2002'
-      ) {
-        throw new ConflictException('NIK already in use')
-      }
-      throw e
-    }
+    const node = await this.prisma.personNode.create({
+      data: {
+        displayName: dto.displayName,
+        gender: dto.gender ?? null,
+        surname: dto.surname ?? null,
+        birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
+        birthPlace: dto.birthPlace ?? null,
+        deathDate: dto.deathDate ? new Date(dto.deathDate) : null,
+        bio: dto.bio ?? null,
+        avatarUrl: dto.avatarUrl ?? null,
+        isDeceased: dto.isDeceased ?? false,
+        isPlaceholder: dto.isPlaceholder ?? false,
+        canvasX: dto.canvasX ?? 0,
+        canvasY: dto.canvasY ?? 0,
+        userId: dto.userId ?? null,
+        familyGroupId,
+      },
+      include: { user: { select: { nik: true } } },
+    })
+    return this.toDto(node)
   }
 
   async update(
@@ -77,7 +70,6 @@ export class PersonNodesService {
       ...(dto.displayName !== undefined && { displayName: dto.displayName }),
       ...(dto.gender !== undefined && { gender: dto.gender }),
       ...(dto.surname !== undefined && { surname: dto.surname }),
-      ...(dto.nik !== undefined && { nik: dto.nik }),
       ...(dto.birthDate !== undefined && { birthDate: dto.birthDate ? new Date(dto.birthDate) : null }),
       ...(dto.birthPlace !== undefined && { birthPlace: dto.birthPlace }),
       ...(dto.deathDate !== undefined && { deathDate: dto.deathDate ? new Date(dto.deathDate) : null }),
@@ -87,21 +79,12 @@ export class PersonNodesService {
       ...(dto.isPlaceholder !== undefined && { isPlaceholder: dto.isPlaceholder }),
     }
 
-    try {
-      const updated = await this.prisma.personNode.update({
-        where: { id },
-        data: updateData,
-      })
-      return this.toDto(updated)
-    } catch (e: unknown) {
-      if (
-        typeof e === 'object' && e !== null &&
-        'code' in e && (e as { code: string }).code === 'P2002'
-      ) {
-        throw new ConflictException('NIK already in use')
-      }
-      throw e
-    }
+    const updated = await this.prisma.personNode.update({
+      where: { id },
+      data: updateData,
+      include: { user: { select: { nik: true } } },
+    })
+    return this.toDto(updated)
   }
 
   async updateCanvasPosition(
@@ -111,6 +94,7 @@ export class PersonNodesService {
     const updated = await this.prisma.personNode.update({
       where: { id },
       data: { canvasX: dto.canvasX, canvasY: dto.canvasY },
+      include: { user: { select: { nik: true } } },
     })
     return this.toDto(updated)
   }
@@ -128,7 +112,6 @@ export class PersonNodesService {
     displayName: string
     gender: 'MALE' | 'FEMALE' | null
     surname: string | null
-    nik: string | null
     birthDate: Date | null
     birthPlace: string | null
     deathDate: Date | null
@@ -142,13 +125,14 @@ export class PersonNodesService {
     familyGroupId: string | null
     createdAt: Date
     updatedAt: Date
+    user?: { nik: string } | null
   }): PersonNode {
     return {
       id: node.id,
       displayName: node.displayName,
       gender: node.gender ?? null,
       surname: node.surname ?? null,
-      nik: node.nik ?? null,
+      nik: node.user?.nik ?? null,
       birthDate: node.birthDate?.toISOString() ?? null,
       birthPlace: node.birthPlace,
       deathDate: node.deathDate?.toISOString() ?? null,
