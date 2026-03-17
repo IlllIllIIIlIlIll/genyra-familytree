@@ -469,6 +469,11 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
           {isCleanView ? <EyeOffIcon /> : <EyeIcon />}
         </button>
 
+        {/* ── Dark backdrop when a card is selected ───────────────────────── */}
+        {!isCleanView && isProfilePanelOpen && selectedNode && (
+          <div className="absolute inset-0 z-[9] bg-black/40 pointer-events-none transition-opacity duration-200" />
+        )}
+
         {/* ── Profile card (hidden in clean view, closes via onPaneClick) ───── */}
         {!isCleanView && isProfilePanelOpen && selectedNode && (
           <div className="absolute inset-x-0 bottom-0 z-10">

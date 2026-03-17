@@ -13,7 +13,7 @@ exports.PersonNodeSchema = zod_1.z.object({
     birthPlace: zod_1.z.string().max(200).nullable(),
     deathDate: zod_1.z.string().datetime().nullable(),
     bio: zod_1.z.string().max(2000).nullable(),
-    avatarUrl: zod_1.z.string().url().nullable(),
+    avatarUrl: zod_1.z.string().nullable(),
     isDeceased: zod_1.z.boolean(),
     isPlaceholder: zod_1.z.boolean(),
     canvasX: zod_1.z.number(),
@@ -32,7 +32,7 @@ exports.CreatePersonNodeSchema = zod_1.z.object({
     birthPlace: zod_1.z.string().max(100).optional().nullable(),
     deathDate: zod_1.z.string().datetime().optional().nullable(),
     bio: zod_1.z.string().max(2000).optional().nullable(),
-    avatarUrl: zod_1.z.string().url().optional().nullable(),
+    avatarUrl: zod_1.z.string().optional().nullable(),
     isDeceased: zod_1.z.boolean().optional().default(false),
     isPlaceholder: zod_1.z.boolean().optional().default(false),
     canvasX: zod_1.z.number().optional().default(0),
@@ -46,7 +46,7 @@ exports.UpdateCanvasPositionSchema = zod_1.z.object({
 });
 exports.PersonPhotoSchema = zod_1.z.object({
     id: zod_1.z.string(),
-    url: zod_1.z.string().url(),
+    url: zod_1.z.string().min(1),
     caption: zod_1.z.string().nullable(),
     takenAt: zod_1.z.string().datetime().nullable(),
     sortOrder: zod_1.z.number(),

@@ -11,7 +11,7 @@ export const PersonNodeSchema = z.object({
   birthPlace: z.string().max(200).nullable(),
   deathDate: z.string().datetime().nullable(),
   bio: z.string().max(2000).nullable(),
-  avatarUrl: z.string().url().nullable(),
+  avatarUrl: z.string().nullable(),
   isDeceased: z.boolean(),
   isPlaceholder: z.boolean(),
   canvasX: z.number(),
@@ -33,7 +33,7 @@ export const CreatePersonNodeSchema = z.object({
   birthPlace: z.string().max(100).optional().nullable(),
   deathDate: z.string().datetime().optional().nullable(),
   bio: z.string().max(2000).optional().nullable(),
-  avatarUrl: z.string().url().optional().nullable(),
+  avatarUrl: z.string().optional().nullable(),
   isDeceased: z.boolean().optional().default(false),
   isPlaceholder: z.boolean().optional().default(false),
   canvasX: z.number().optional().default(0),
@@ -53,7 +53,7 @@ export type UpdateCanvasPositionDto = z.infer<typeof UpdateCanvasPositionSchema>
 
 export const PersonPhotoSchema = z.object({
   id: z.string(),
-  url: z.string().url(),
+  url: z.string().min(1),
   caption: z.string().nullable(),
   takenAt: z.string().datetime().nullable(),
   sortOrder: z.number(),

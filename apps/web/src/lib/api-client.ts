@@ -156,7 +156,7 @@ export const apiClient = {
     await http.delete(`/person-nodes/${id}`)
   },
 
-  // Person Photos
+  // Person Photos — images stored as base64 data URLs directly in the DB
   getPersonPhotos: async (personNodeId: string): Promise<PersonPhoto[]> => {
     const { data } = await http.get<PersonPhoto[]>(`/person-nodes/${personNodeId}/photos`)
     return data
@@ -164,34 +164,21 @@ export const apiClient = {
 
   uploadPersonPhoto: async (
     personNodeId: string,
-    file: File,
+    dataUrl: string,
     caption?: string,
     takenAt?: string,
   ): Promise<PersonPhoto> => {
-    const form = new FormData()
-    form.append('file', file)
-    form.append('personNodeId', personNodeId)
-    if (caption) form.append('caption', caption)
-    if (takenAt) form.append('takenAt', takenAt)
-    const { data } = await http.post<PersonPhoto>('/person-photos', form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+    const { data } = await http.post<PersonPhoto>('/person-photos', {
+      personNodeId,
+      dataUrl,
+      caption:  caption  ?? null,
+      takenAt:  takenAt  ?? null,
     })
     return data
   },
 
   deletePersonPhoto: async (id: string): Promise<void> => {
     await http.delete(`/person-photos/${id}`)
-  },
-
-  uploadAvatar: async (personNodeId: string, file: File): Promise<PersonNode> => {
-    const form = new FormData()
-    form.append('file', file)
-    const { data } = await http.post<PersonNode>(
-      `/person-nodes/${personNodeId}/avatar`,
-      form,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
-    )
-    return data
   },
 
   // Relationships

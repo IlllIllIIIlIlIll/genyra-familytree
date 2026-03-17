@@ -1,12 +1,10 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Req } from '@nestjs/common'
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger'
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common'
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { PersonNodesService } from './person-nodes.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator'
 import { CreatePersonNodeSchema, UpdatePersonNodeSchema, UpdateCanvasPositionSchema } from '@genyra/shared-types'
 import type { PersonNode, CreatePersonNodeDto, UpdatePersonNodeDto, UpdateCanvasPositionDto } from '@genyra/shared-types'
-import type { FastifyRequest } from 'fastify'
-import { handleAvatarUpload } from '../person-photos/person-photos.controller'
 
 @ApiTags('person-nodes')
 @ApiBearerAuth()
@@ -50,18 +48,6 @@ export class PersonNodesController {
   ): Promise<PersonNode> {
     const dto = UpdateCanvasPositionSchema.parse(body) satisfies UpdateCanvasPositionDto
     return this.personNodesService.updateCanvasPosition(id, dto)
-  }
-
-  @Post(':id/avatar')
-  @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Upload avatar image for a person node' })
-  async uploadAvatar(
-    @Param('id') id: string,
-    @Req() req: FastifyRequest,
-    @CurrentUser() user: JwtPayload,
-  ): Promise<PersonNode> {
-    const avatarUrl = await handleAvatarUpload(req)
-    return this.personNodesService.update(id, { avatarUrl }, user.sub)
   }
 
   @Delete(':id')

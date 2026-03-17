@@ -44,7 +44,13 @@ export function Avatar({ src, name, size = 'md', className }: AvatarProps) {
       )}
     >
       {resolvedSrc ? (
-        <Image src={resolvedSrc} alt={name} width={px} height={px} className="object-cover w-full h-full" />
+        resolvedSrc.startsWith('blob:') || resolvedSrc.startsWith('data:') ? (
+          // blob: and data: URLs can't go through Next.js image optimization
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={resolvedSrc} alt={name} width={px} height={px} className="object-cover w-full h-full" />
+        ) : (
+          <Image src={resolvedSrc} alt={name} width={px} height={px} className="object-cover w-full h-full" />
+        )
       ) : (
         <span>{getInitials(name)}</span>
       )}

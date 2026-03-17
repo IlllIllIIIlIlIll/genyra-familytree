@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -12,6 +12,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CityCombobox } from '@/components/ui/city-combobox'
+import { ImageCropper } from '@/components/ui/image-cropper'
 import { FONT, MAX_CHARS } from '@/lib/design-tokens'
 import { cn } from '@/lib/utils'
 
@@ -52,9 +53,9 @@ export default function EditProfilePage() {
   const toast         = useToastStore((s) => s.toast)
   const queryClient   = useQueryClient()
 
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
-  const [pendingAvatar, setPendingAvatar] = useState<File | null>(null)
+  const fileInputRef   = useRef<HTMLInputElement>(null)
+  const [pendingAvatar, setPendingAvatar]   = useState<string | null>(null) // data URL
+  const [cropFile,      setCropFile]        = useState<File | null>(null)
 
   const { data: mapData, isLoading } = useQuery({
     queryKey:  ['map-data', familyGroupId],
@@ -94,12 +95,6 @@ export default function EditProfilePage() {
 
   const updateMutation = useMutation({
     mutationFn: async (values: EditFormValues) => {
-      // 1. Upload avatar if a new one was picked
-      if (pendingAvatar) {
-        await apiClient.uploadAvatar(personId, pendingAvatar)
-      }
-
-      // 2. Patch fields
       await apiClient.updatePersonNode(personId, {
         displayName: values.displayName,
         surname:     values.surname || null,
@@ -110,6 +105,8 @@ export default function EditProfilePage() {
         bio:         values.bio || null,
         nik:         values.nik || null,
         isDeceased:  values.isDeceased ?? false,
+        // data URL stored directly in DB — only include when a new avatar was cropped
+        ...(pendingAvatar !== null && { avatarUrl: pendingAvatar }),
       })
     },
     onSuccess: () => {
@@ -128,13 +125,21 @@ export default function EditProfilePage() {
   function handleAvatarPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) {
-      toast('Image must be under 5 MB', 'error')
+    if (file.size > 20 * 1024 * 1024) {
+      toast('Image must be under 20 MB', 'error')
       return
     }
-    setPendingAvatar(file)
-    setAvatarPreview(URL.createObjectURL(file))
+    // Reset input so same file can be re-selected
+    e.target.value = ''
+    setCropFile(file)
   }
+
+  const handleCropConfirm = useCallback((dataUrl: string) => {
+    setPendingAvatar(dataUrl)
+    setCropFile(null)
+  }, [])
+
+  const handleCropCancel = useCallback(() => setCropFile(null), [])
 
   const isDeceased = watch('isDeceased')
 
@@ -156,6 +161,16 @@ export default function EditProfilePage() {
   }
 
   return (
+    <>
+    {cropFile && (
+      <ImageCropper
+        file={cropFile}
+        defaultAspect={1}
+        maxOutputPx={400}
+        onConfirm={handleCropConfirm}
+        onCancel={handleCropCancel}
+      />
+    )}
     <div className="flex-1 flex flex-col bg-stone-50 overflow-y-auto">
 
       {/* Header */}
@@ -197,7 +212,7 @@ export default function EditProfilePage() {
             className="relative group"
           >
             <Avatar
-              src={avatarPreview ?? node.avatarUrl}
+              src={pendingAvatar ?? node.avatarUrl}
               name={node.displayName}
               size="xl"
             />
@@ -376,6 +391,7 @@ export default function EditProfilePage() {
 
       </form>
     </div>
+    </>
   )
 }
 
