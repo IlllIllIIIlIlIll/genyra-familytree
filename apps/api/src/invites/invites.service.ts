@@ -36,14 +36,14 @@ export class InvitesService {
     const familyGroupId = user.personNode?.familyGroupId
     if (!familyGroupId) throw new ForbiddenException('User has no family group')
 
-    // Prefer an existing UNUSED invite
+    // Return the most recent invite regardless of status; only auto-create on first ever access
     const existing = await this.prisma.invite.findFirst({
-      where:   { familyGroupId, status: 'UNUSED' },
+      where:   { familyGroupId },
       orderBy: { createdAt: 'desc' },
     })
     if (existing) return this.toDto(existing)
 
-    // Otherwise create a fresh one
+    // No invite has ever been created for this family — create the first one
     const code      = await uniqueCode(this.prisma)
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     const invite    = await this.prisma.invite.create({ data: { code, expiresAt, familyGroupId } })
@@ -64,7 +64,7 @@ export class InvitesService {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
     const existing = await this.prisma.invite.findFirst({
-      where:   { familyGroupId, status: 'UNUSED' },
+      where:   { familyGroupId },
       orderBy: { createdAt: 'desc' },
     })
 

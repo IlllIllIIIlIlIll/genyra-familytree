@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AuthTokensSchema = exports.MapDataSchema = exports.ValidateInviteSchema = exports.InviteSchema = exports.InviteStatusSchema = exports.CreateFamilyGroupSchema = exports.FamilyGroupSchema = void 0;
+exports.AdminBadgeSchema = exports.NotificationSchema = exports.AuthTokensSchema = exports.MapDataSchema = exports.ValidateInviteSchema = exports.InviteSchema = exports.InviteStatusSchema = exports.CreateFamilyGroupSchema = exports.FamilyGroupSchema = void 0;
 const zod_1 = require("zod");
 const person_node_types_1 = require("./person-node.types");
 const relationship_types_1 = require("./relationship.types");
@@ -34,5 +34,17 @@ exports.MapDataSchema = zod_1.z.object({
 exports.AuthTokensSchema = zod_1.z.object({
     accessToken: zod_1.z.string(),
     refreshToken: zod_1.z.string(),
+});
+exports.NotificationSchema = zod_1.z.object({
+    id: zod_1.z.string(),
+    familyGroupId: zod_1.z.string(),
+    type: zod_1.z.string(),
+    message: zod_1.z.string(),
+    personNodeId: zod_1.z.string().nullable(),
+    createdAt: zod_1.z.string().datetime(),
+});
+exports.AdminBadgeSchema = zod_1.z.object({
+    pendingCount: zod_1.z.number(),
+    inviteExpired: zod_1.z.boolean(),
 });
 //# sourceMappingURL=api-response.types.js.map

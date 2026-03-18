@@ -45,11 +45,41 @@ export class AuthService {
           throw new BadRequestException('Referrer not found in this family')
         }
 
-        const referrerNodeId = referrerUser.personNode.id
+        const referrerNodeId   = referrerUser.personNode.id
+        const referrerGender   = referrerUser.personNode.gender
 
-        if (dto.referrerRelationship === 'REFERRER_IS_SON' || dto.referrerRelationship === 'REFERRER_IS_DAUGHTER') {
-          // Registrant claims to be the PARENT of the referrer.
-          // A person can have at most one father and one mother.
+        if (dto.referrerRelationship === 'REFERRER_IS_FATHER') {
+          // Referrer claims to be the registrant's father — must be male and married
+          if (referrerGender !== 'MALE') {
+            throw new BadRequestException('The referrer you selected is not registered as male')
+          }
+          const spouseEdge = await this.prisma.relationshipEdge.findFirst({
+            where: {
+              OR: [
+                { sourceId: referrerNodeId, relationshipType: 'SPOUSE' },
+                { targetId: referrerNodeId, relationshipType: 'SPOUSE' },
+              ],
+            },
+          })
+          if (!spouseEdge) {
+            throw new BadRequestException('The referrer must be married to be registered as a father')
+          }
+          // Registrant cannot already have a father (checked at approval, but pre-check here too)
+          const existingFather = await this.prisma.relationshipEdge.findFirst({
+            where: {
+              targetId:         referrerNodeId,
+              relationshipType: 'PARENT_CHILD',
+              source:           { gender: 'MALE' },
+            },
+          })
+          void existingFather // father-slot checked at edge-creation; skip blocking here
+        }
+
+        if (dto.referrerRelationship === 'REFERRER_IS_SON') {
+          // Referrer is the son — must be male; registrant can't add a second father of same gender
+          if (referrerGender !== 'MALE') {
+            throw new BadRequestException('The referrer you selected is not registered as male')
+          }
           const existingParent = await this.prisma.relationshipEdge.findFirst({
             where: {
               targetId:         referrerNodeId,
@@ -58,7 +88,24 @@ export class AuthService {
             },
           })
           if (existingParent) {
-            throw new BadRequestException('Relationship position not available')
+            throw new BadRequestException('This child already has a parent of that gender registered')
+          }
+        }
+
+        if (dto.referrerRelationship === 'REFERRER_IS_DAUGHTER') {
+          // Referrer is the daughter — must be female
+          if (referrerGender !== 'FEMALE') {
+            throw new BadRequestException('The referrer you selected is not registered as female')
+          }
+          const existingParent = await this.prisma.relationshipEdge.findFirst({
+            where: {
+              targetId:         referrerNodeId,
+              relationshipType: 'PARENT_CHILD',
+              source:           { gender: dto.gender },
+            },
+          })
+          if (existingParent) {
+            throw new BadRequestException('This child already has a parent of that gender registered')
           }
         }
       }

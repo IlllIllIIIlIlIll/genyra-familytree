@@ -28,7 +28,7 @@ import { RelationshipEdgeComponent } from './relationship-edge'
 import { BracketEdgeComponent } from './bracket-edge'
 import { ProfileCard } from '@/components/profile/profile-card'
 import { computeFamilyLayout } from './family-layout'
-import type { PersonNode } from '@genyra/shared-types'
+import type { PersonNode, Notification } from '@genyra/shared-types'
 
 const nodeTypes = {
   personNode: PersonNodeComponent,
@@ -124,6 +124,15 @@ function RefreshIcon() {
   )
 }
 
+function BellIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  )
+}
+
 // ── Inner component (must be inside ReactFlowProvider to use useReactFlow) ─────
 function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   const { fitView, setCenter, getNode, getViewport, setViewport } = useReactFlow()
@@ -143,9 +152,36 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   const canvasRef     = useRef<HTMLDivElement>(null)
   const longPressTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressNodeId = useRef<string | null>(null)
-  const [minimapSize, setMinimapSize]     = useState(getMinimapSize)
-  const [isEditingName, setIsEditingName] = useState(false)
-  const [nameDraft, setNameDraft]         = useState('')
+  const [minimapSize, setMinimapSize]         = useState(getMinimapSize)
+  const [isEditingName, setIsEditingName]     = useState(false)
+  const [nameDraft, setNameDraft]             = useState('')
+  const [isNotifPanelOpen, setIsNotifPanelOpen] = useState(false)
+
+  // Notification last-read timestamp stored per user in localStorage
+  const notifKey = currentUserId ? `notif_last_read_${currentUserId}` : null
+  const getLastRead = useCallback((): number => {
+    if (!notifKey) return 0
+    return Number(localStorage.getItem(notifKey) ?? 0)
+  }, [notifKey])
+
+  const { data: notifications = [] } = useQuery({
+    queryKey: ['notifications'],
+    queryFn:  () => apiClient.getNotifications(),
+    enabled:  !!currentUserId,
+    refetchInterval: 30_000,
+  })
+
+  const unreadCount = useMemo(() => {
+    const lastRead = getLastRead()
+    return notifications.filter((n) => new Date(n.createdAt).getTime() > lastRead).length
+  }, [notifications, getLastRead])
+
+  const handleOpenNotif = useCallback(() => {
+    setIsNotifPanelOpen(true)
+    if (notifKey) localStorage.setItem(notifKey, String(Date.now()))
+  }, [notifKey])
+
+  const handleCloseNotif = useCallback(() => setIsNotifPanelOpen(false), [])
 
   useEffect(() => {
     const update = () => setMinimapSize(getMinimapSize())
@@ -469,6 +505,18 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <button
+              onClick={handleOpenNotif}
+              className="relative p-2 rounded-lg text-slate-500 hover:bg-stone-100 transition-colors"
+              title="Notifications"
+            >
+              <BellIcon />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-[14px] h-3.5 px-0.5 flex items-center justify-center rounded-full bg-brand-500 text-white text-[9px] font-bold leading-none">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
+            <button
               onClick={handleDownload}
               className="p-2 rounded-lg text-slate-500 hover:bg-stone-100 transition-colors"
               title="Download family tree as PNG"
@@ -579,6 +627,31 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
           <div className="absolute inset-x-0 bottom-0 z-10">
             <ProfileCard node={selectedNode} />
           </div>
+        )}
+
+        {/* ── Notification dropdown (compact, top-right) ──────────────────── */}
+        {isNotifPanelOpen && (
+          <>
+            <div className="absolute inset-0 z-[30]" onClick={handleCloseNotif} />
+            <div className="absolute top-12 right-3 z-[31] w-72 bg-white rounded-2xl shadow-xl border border-stone-100 overflow-hidden">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide px-4 pt-3 pb-2">Notifications</p>
+              {notifications.length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-5 px-4">No notifications yet.</p>
+              ) : (
+                <ul className="divide-y divide-stone-50 max-h-72 overflow-y-auto">
+                  {notifications.map((n: Notification) => (
+                    <li key={n.id} className="px-4 py-3">
+                      <p className="text-xs text-slate-700 leading-snug">{n.message}</p>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        {new Date(n.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="pb-2" />
+            </div>
+          </>
         )}
       </div>
     </div>

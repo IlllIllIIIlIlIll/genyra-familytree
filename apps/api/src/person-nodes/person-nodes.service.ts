@@ -1,11 +1,21 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common'
+import { NotificationsService } from '../notifications/notifications.service'
+
+function sanitizeAvatarUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  if (url.startsWith('data:') || url.startsWith('https://')) return url
+  return null
+}
 import type { Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import type { PersonNode, CreatePersonNodeDto, UpdatePersonNodeDto, UpdateCanvasPositionDto, AddChildDto } from '@genyra/shared-types'
 
 @Injectable()
 export class PersonNodesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma:        PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async findById(id: string): Promise<PersonNode> {
     const node = await this.prisma.personNode.findUnique({
@@ -84,6 +94,20 @@ export class PersonNodesService {
       data: updateData,
       include: { user: { select: { nik: true } } },
     })
+
+    // Notify family when a member is marked as deceased
+    if (dto.isDeceased === true && !node.isDeceased && node.familyGroupId) {
+      await this.prisma.notification.create({
+        data: {
+          familyGroupId: node.familyGroupId,
+          type:          'MEMBER_DECEASED',
+          message:       `${node.displayName} has passed away. May their memory be cherished.`,
+          personNodeId:  node.id,
+        },
+      })
+      await this.notifications.pruneForFamily(node.familyGroupId)
+    }
+
     return this.toDto(updated)
   }
 
@@ -258,7 +282,7 @@ export class PersonNodesService {
       birthPlace: node.birthPlace,
       deathDate: node.deathDate?.toISOString() ?? null,
       bio: node.bio,
-      avatarUrl: node.avatarUrl,
+      avatarUrl: sanitizeAvatarUrl(node.avatarUrl),
       isDeceased: node.isDeceased,
       isPlaceholder: node.isPlaceholder,
       pendingApproval: node.pendingApproval,

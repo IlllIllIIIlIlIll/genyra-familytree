@@ -230,4 +230,38 @@ export declare const AuthTokensSchema: z.ZodObject<{
     refreshToken: string;
 }>;
 export type AuthTokens = z.infer<typeof AuthTokensSchema>;
+export declare const NotificationSchema: z.ZodObject<{
+    id: z.ZodString;
+    familyGroupId: z.ZodString;
+    type: z.ZodString;
+    message: z.ZodString;
+    personNodeId: z.ZodNullable<z.ZodString>;
+    createdAt: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    message: string;
+    type: string;
+    id: string;
+    familyGroupId: string;
+    createdAt: string;
+    personNodeId: string | null;
+}, {
+    message: string;
+    type: string;
+    id: string;
+    familyGroupId: string;
+    createdAt: string;
+    personNodeId: string | null;
+}>;
+export type Notification = z.infer<typeof NotificationSchema>;
+export declare const AdminBadgeSchema: z.ZodObject<{
+    pendingCount: z.ZodNumber;
+    inviteExpired: z.ZodBoolean;
+}, "strip", z.ZodTypeAny, {
+    pendingCount: number;
+    inviteExpired: boolean;
+}, {
+    pendingCount: number;
+    inviteExpired: boolean;
+}>;
+export type AdminBadge = z.infer<typeof AdminBadgeSchema>;
 //# sourceMappingURL=api-response.types.d.ts.map

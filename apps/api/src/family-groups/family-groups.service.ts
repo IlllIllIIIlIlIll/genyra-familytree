@@ -9,6 +9,13 @@ import type {
   RelationshipEdge,
 } from '@genyra/shared-types'
 
+/** Only pass through data URLs or absolute https URLs — drop stale local file paths. */
+function sanitizeAvatarUrl(url: string | null | undefined): string | null {
+  if (!url) return null
+  if (url.startsWith('data:') || url.startsWith('https://')) return url
+  return null
+}
+
 @Injectable()
 export class FamilyGroupsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -167,7 +174,7 @@ export class FamilyGroupsService {
     const [group, personNodes, relationships] = await Promise.all([
       this.prisma.familyGroup.findUnique({ where: { id: groupId } }),
       this.prisma.personNode.findMany({
-        where: { familyGroupId: groupId },
+        where: { familyGroupId: groupId, pendingApproval: false },
         include: {
           photos: { orderBy: { sortOrder: 'asc' }, take: 1 },
           user:   { select: { nik: true } },
@@ -175,7 +182,8 @@ export class FamilyGroupsService {
       }),
       this.prisma.relationshipEdge.findMany({
         where: {
-          source: { familyGroupId: groupId },
+          source: { familyGroupId: groupId, pendingApproval: false },
+          target: { pendingApproval: false },
         },
       }),
     ])
@@ -190,7 +198,7 @@ export class FamilyGroupsService {
       birthPlace: n.birthPlace ?? null,
       deathDate: n.deathDate?.toISOString() ?? null,
       bio: n.bio ?? null,
-      avatarUrl: n.photos[0]?.url ?? n.avatarUrl ?? null,
+      avatarUrl: n.photos[0]?.url ?? sanitizeAvatarUrl(n.avatarUrl),
       isDeceased: n.isDeceased,
       isPlaceholder: n.isPlaceholder,
       pendingApproval: n.pendingApproval,

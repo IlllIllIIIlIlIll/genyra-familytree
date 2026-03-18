@@ -20,6 +20,8 @@ import type {
   MemberStatus,
   PersonPhoto,
   AddChildDto,
+  Notification,
+  AdminBadge,
 } from '@genyra/shared-types'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'
@@ -247,6 +249,18 @@ export const apiClient = {
   // Update family name (Family Head only)
   updateFamilyName: async (familyGroupId: string, name: string): Promise<FamilyGroup> => {
     const { data } = await http.patch<FamilyGroup>(`/family-groups/${familyGroupId}/name`, { name })
+    return data
+  },
+
+  // Notifications
+  getNotifications: async (): Promise<Notification[]> => {
+    const { data } = await http.get<Notification[]>('/notifications/my-family')
+    return data
+  },
+
+  // Admin badge: pending count + invite expired status (Family Head only)
+  getAdminBadge: async (): Promise<AdminBadge> => {
+    const { data } = await http.get<AdminBadge>('/users/pending-count')
     return data
   },
 }

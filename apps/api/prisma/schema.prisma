@@ -66,11 +66,25 @@ model FamilyGroup {
   name        String
   description String?
 
-  members     PersonNode[]
-  invites     Invite[]
+  members       PersonNode[]
+  invites       Invite[]
+  notifications Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id            String      @id @default(cuid())
+  familyGroupId String
+  familyGroup   FamilyGroup @relation(fields: [familyGroupId], references: [id])
+  type          String      // 'NEW_MEMBER' | 'MEMBER_DECEASED'
+  message       String
+  personNodeId  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([familyGroupId, createdAt])
 }
 
 model PersonNode {

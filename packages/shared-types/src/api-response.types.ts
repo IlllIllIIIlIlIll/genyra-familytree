@@ -46,3 +46,19 @@ export const AuthTokensSchema = z.object({
   refreshToken: z.string(),
 })
 export type AuthTokens = z.infer<typeof AuthTokensSchema>
+
+export const NotificationSchema = z.object({
+  id:            z.string(),
+  familyGroupId: z.string(),
+  type:          z.string(),
+  message:       z.string(),
+  personNodeId:  z.string().nullable(),
+  createdAt:     z.string().datetime(),
+})
+export type Notification = z.infer<typeof NotificationSchema>
+
+export const AdminBadgeSchema = z.object({
+  pendingCount:   z.number(),
+  inviteExpired:  z.boolean(),
+})
+export type AdminBadge = z.infer<typeof AdminBadgeSchema>

@@ -29,7 +29,9 @@
       "Bash(PRISMA_MIGRATE_ACCEPT_DATA_LOSS=1 npx prisma migrate dev --name remove_person_node_nik)",
       "Bash(tasklist /FI \"IMAGENAME eq node.exe\")",
       "Bash(tasklist)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(npx tsc:*)",
+      "Bash(1:*)"
     ]
   }
 }

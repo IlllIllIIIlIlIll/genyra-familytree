@@ -8,6 +8,7 @@ import { PersonNodesModule } from './person-nodes/person-nodes.module'
 import { RelationshipsModule } from './relationships/relationships.module'
 import { InvitesModule } from './invites/invites.module'
 import { PersonPhotosModule } from './person-photos/person-photos.module'
+import { NotificationsModule } from './notifications/notifications.module'
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { PersonPhotosModule } from './person-photos/person-photos.module'
     RelationshipsModule,
     InvitesModule,
     PersonPhotosModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}
