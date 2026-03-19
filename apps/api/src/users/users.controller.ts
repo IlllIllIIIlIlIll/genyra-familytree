@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Body, UseGuards, Param, Query } from '@nestjs/common'
+import { Controller, Get, Patch, Delete, Body, UseGuards, Param, Query } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { UsersService } from './users.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
@@ -18,6 +18,14 @@ export class UsersController {
   @ApiOperation({ summary: 'Get current user profile' })
   async getMe(@CurrentUser() user: JwtPayload): Promise<User> {
     return this.usersService.findById(user.sub)
+  }
+
+  @Get('members')
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_HEAD')
+  @ApiOperation({ summary: 'Get all active family members (Family Head only)' })
+  async getMembers(@CurrentUser() user: JwtPayload): Promise<User[]> {
+    return this.usersService.findActiveByGroup(user.sub)
   }
 
   @Get('pending-count')
@@ -55,5 +63,16 @@ export class UsersController {
     @Body() body: { status: MemberStatus },
   ): Promise<User> {
     return this.usersService.updateStatus(id, body.status)
+  }
+
+  @Delete(':id')
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_HEAD')
+  @ApiOperation({ summary: 'Permanently remove a family member (Family Head only)' })
+  async deleteUser(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<void> {
+    return this.usersService.deleteUser(id, user.sub)
   }
 }

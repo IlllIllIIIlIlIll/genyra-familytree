@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api-client'
 import { useAuthStore, useToastStore } from '@/store/map-store'
@@ -19,7 +19,8 @@ export default function AdminPage() {
   const familyGroupId = useAuthStore((s) => s.familyGroupId)
   const toast         = useToastStore((s) => s.toast)
   const queryClient   = useQueryClient()
-  const [copied, setCopied]  = useState(false)
+  const [copied, setCopied]             = useState(false)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   // ── Invite ─────────────────────────────────────────────────────────────────
   const { data: invite, isLoading: loadingInvite } = useQuery({
@@ -121,11 +122,34 @@ export default function AdminPage() {
     onError: () => toast('Failed to remove', 'error'),
   })
 
+  // ── All active members ─────────────────────────────────────────────────────
+  const { data: members = [] } = useQuery({
+    queryKey: ['family-members'],
+    queryFn:  () => apiClient.getFamilyMembers(),
+    enabled:  !!familyGroupId,
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (userId: string) => apiClient.deleteUser(userId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['family-members'] })
+      void queryClient.invalidateQueries({ queryKey: ['map-data', familyGroupId] })
+      void queryClient.invalidateQueries({ queryKey: ['admin-badge'] })
+      setConfirmDeleteId(null)
+      toast('Member removed from the family tree', 'neutral')
+    },
+    onError: () => toast('Failed to remove member', 'error'),
+  })
+
+  const handleDeleteClick = useCallback((id: string) => {
+    setConfirmDeleteId((prev) => (prev === id ? null : id))
+  }, [])
+
   const totalPending = pendingUsers.length + pendingNodes.length
   const isLoading    = loadingUsers || loadingNodes
 
   return (
-    <div className="min-h-screen bg-stone-50 pb-24">
+    <div className="min-h-screen bg-stone-50 pb-36">
       <header className="bg-white border-b border-stone-100 px-4 py-4 sticky top-0 z-10">
         <h1 className="text-base font-semibold text-slate-800">Admin Panel</h1>
       </header>
@@ -297,6 +321,64 @@ export default function AdminPage() {
                   >
                     Remove
                   </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* ── Members (remove from tree) ────────────────────────────────────── */}
+        {members.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">
+              Family Members ({members.length})
+            </p>
+            <p className="text-xs text-slate-400 mb-3">
+              Removing a member deletes their account and node from the tree permanently.
+            </p>
+            <ul className="space-y-2">
+              {members.map((member: User) => (
+                <li key={member.id} className="bg-white rounded-xl border border-stone-100 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-slate-800 text-sm">{member.displayName}</p>
+                      <p className="text-xs text-slate-400">
+                        NIK: {member.nik}
+                        {member.role === 'FAMILY_HEAD' && (
+                          <span className="ml-2 text-brand-500 font-medium">Family Head</span>
+                        )}
+                      </p>
+                    </div>
+                    {confirmDeleteId === member.id ? (
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          onClick={() => deleteMutation.mutate(member.id)}
+                          disabled={deleteMutation.isPending}
+                          className="px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50"
+                        >
+                          {deleteMutation.isPending ? 'Removing…' : 'Confirm'}
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="px-3 py-1.5 text-xs font-medium bg-stone-100 text-slate-600 rounded-lg hover:bg-stone-200"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleDeleteClick(member.id)}
+                        className="px-3 py-1.5 text-xs font-medium bg-red-50 text-red-600 rounded-lg hover:bg-red-100 shrink-0"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  {confirmDeleteId === member.id && (
+                    <p className="text-xs text-red-500 mt-2">
+                      This will permanently delete {member.displayName} and all their data. This cannot be undone.
+                    </p>
+                  )}
                 </li>
               ))}
             </ul>

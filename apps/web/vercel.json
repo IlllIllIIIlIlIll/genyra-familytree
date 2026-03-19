@@ -1,0 +1,6 @@
+{
+  "framework": "nextjs",
+  "installCommand": "cd ../.. && npm install -g pnpm && pnpm install --frozen-lockfile",
+  "buildCommand": "cd ../.. && pnpm --filter @genyra/shared-types build && cd apps/web && pnpm build",
+  "outputDirectory": ".next"
+}

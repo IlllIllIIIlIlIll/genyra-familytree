@@ -96,11 +96,18 @@ export const apiClient = {
 
   getPendingUsers: async (): Promise<User[]> => {
     const me = await apiClient.getMe()
-    if (!me.familyGroupId) {
-      return []
-    }
+    if (!me.familyGroupId) return []
     const { data } = await http.get<User[]>(`/users?familyGroupId=${me.familyGroupId}&status=PENDING_APPROVAL`)
     return data
+  },
+
+  getFamilyMembers: async (): Promise<User[]> => {
+    const { data } = await http.get<User[]>('/users/members')
+    return data
+  },
+
+  deleteUser: async (userId: string): Promise<void> => {
+    await http.delete(`/users/${userId}`)
   },
 
   updateUserStatus: async (userId: string, status: MemberStatus): Promise<User> => {

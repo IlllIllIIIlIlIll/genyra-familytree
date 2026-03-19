@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import type { User, MemberStatus, PersonNode } from '@genyra/shared-types'
@@ -17,6 +17,45 @@ export class UsersService {
     })
     if (!user || !user.personNode) throw new NotFoundException('User not found')
     return this.toUserDto(user, user.personNode)
+  }
+
+  async findActiveByGroup(requestingUserId: string): Promise<User[]> {
+    const me = await this.prisma.user.findUnique({
+      where:   { id: requestingUserId },
+      include: { personNode: { select: { familyGroupId: true } } },
+    })
+    if (me?.role !== 'FAMILY_HEAD') throw new ForbiddenException('Only Family Head can list members')
+    const familyGroupId = me.personNode?.familyGroupId
+    if (!familyGroupId) return []
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        status:     { not: 'PENDING_APPROVAL' },
+        personNode: { familyGroupId },
+        NOT:        { id: requestingUserId },   // exclude self
+      },
+      include:  { personNode: true },
+      orderBy:  { createdAt: 'asc' },
+    })
+    return users.map((u) => this.toUserDto(u, u.personNode!))
+  }
+
+  async deleteUser(targetId: string, requestingUserId: string): Promise<void> {
+    const [requester, target] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: requestingUserId } }),
+      this.prisma.user.findUnique({ where: { id: targetId }, include: { personNode: true } }),
+    ])
+    if (requester?.role !== 'FAMILY_HEAD') throw new ForbiddenException('Only Family Head can remove members')
+    if (!target) throw new NotFoundException('User not found')
+    if (target.id === requestingUserId) throw new ForbiddenException('You cannot remove yourself')
+    if (target.role === 'FAMILY_HEAD') throw new ForbiddenException('Cannot remove another Family Head')
+
+    await this.prisma.$transaction(async (tx) => {
+      if (target.personNode) {
+        await tx.personNode.delete({ where: { id: target.personNode.id } })
+      }
+      await tx.user.delete({ where: { id: targetId } })
+    })
   }
 
   async findPendingByGroup(familyGroupId: string): Promise<User[]> {
