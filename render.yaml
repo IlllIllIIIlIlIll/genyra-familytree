@@ -3,7 +3,7 @@ services:
     name: genyra-api
     runtime: node
     rootDir: apps/api
-    buildCommand: npm install -g pnpm && pnpm install --frozen-lockfile && pnpm build && pnpm prisma:generate && pnpm prisma:migrate:deploy
+    buildCommand: npm install -g pnpm && pnpm install --frozen-lockfile && pnpm prisma:generate && pnpm prisma:migrate:deploy && pnpm build
     startCommand: node dist/main
     healthCheckPath: /api
     envVars:
@@ -12,7 +12,7 @@ services:
       - key: PORT
         value: 3001
       - key: DATABASE_URL
-        sync: false          # set manually in Render dashboard
+        sync: false
       - key: JWT_ACCESS_SECRET
         sync: false
       - key: JWT_REFRESH_SECRET
@@ -22,4 +22,4 @@ services:
       - key: JWT_REFRESH_EXPIRES_IN
         value: 7d
       - key: FRONTEND_URL
-        sync: false          # set to your Vercel URL after deploying frontend
+        sync: false
