@@ -44,7 +44,6 @@ async function main() {
             displayName:   opts.displayName,
             gender:        opts.gender,
             surname:       opts.surname ?? null,
-            nik:           opts.nik,
             birthDate:     opts.birthDate,
             birthPlace:    opts.birthPlace,
             isDeceased:    opts.isDeceased ?? false,
