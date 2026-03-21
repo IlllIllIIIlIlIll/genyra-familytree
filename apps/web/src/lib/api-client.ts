@@ -108,8 +108,8 @@ export const apiClient = {
     return data
   },
 
-  deleteUser: async (userId: string): Promise<void> => {
-    await http.delete(`/users/${userId}`)
+  deleteUser: async (userId: string, targetPassword: string): Promise<void> => {
+    await http.delete(`/users/${userId}`, { data: { targetPassword } })
   },
 
   updateUserStatus: async (userId: string, status: MemberStatus): Promise<User> => {
@@ -298,6 +298,24 @@ export const apiClient = {
 
   processLeaveRequest: async (familyGroupId: string, requestId: string, approve: boolean): Promise<{ message: string }> => {
     const { data } = await http.patch<{ message: string }>(`/family-groups/${familyGroupId}/leave-requests/${requestId}`, { approve })
+    return data
+  },
+
+  // Transfer family head ownership
+  transferOwnership: async (familyGroupId: string, newHeadUserId: string): Promise<{ message: string }> => {
+    const { data } = await http.post<{ message: string }>(`/family-groups/${familyGroupId}/transfer-ownership`, { newHeadUserId })
+    return data
+  },
+
+  // Delete entire family (head only, last member)
+  deleteFamily: async (familyGroupId: string): Promise<{ message: string }> => {
+    const { data } = await http.delete<{ message: string }>(`/family-groups/${familyGroupId}`)
+    return data
+  },
+
+  // Join an additional family (user already in another family)
+  joinAdditionalFamily: async (inviteCode: string): Promise<{ message: string }> => {
+    const { data } = await http.post<{ message: string }>('/family-groups/join-additional', { inviteCode })
     return data
   },
 

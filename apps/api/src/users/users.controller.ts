@@ -83,8 +83,9 @@ export class UsersController {
   @ApiOperation({ summary: 'Permanently remove a family member (Family Head only)' })
   async deleteUser(
     @Param('id') id: string,
+    @Body() body: { targetPassword: string },
     @CurrentUser() user: JwtPayload,
   ): Promise<void> {
-    return this.usersService.deleteUser(id, user.sub)
+    return this.usersService.deleteUser(id, user.sub, body.targetPassword)
   }
 }

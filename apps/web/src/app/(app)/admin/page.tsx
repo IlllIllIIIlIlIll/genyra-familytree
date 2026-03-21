@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useRouter } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
 import { useAuthStore, useToastStore } from '@/store/map-store'
 import { cn } from '@/lib/utils'
@@ -19,10 +20,15 @@ export default function AdminPage() {
   const familyGroupId = useAuthStore((s) => s.familyGroupId)
   const toast         = useToastStore((s) => s.toast)
   const queryClient   = useQueryClient()
-  const [copied, setCopied]             = useState(false)
+  const router        = useRouter()
+  const [copied, setCopied]                   = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-  const [editNikId, setEditNikId]       = useState<string | null>(null)
-  const [nikDraft, setNikDraft]         = useState('')
+  const [deletePassword, setDeletePassword]   = useState('')
+  const [editNikId, setEditNikId]             = useState<string | null>(null)
+  const [nikDraft, setNikDraft]               = useState('')
+  const [transferOpen, setTransferOpen]       = useState(false)
+  const [transferTargetId, setTransferTargetId] = useState<string | null>(null)
+  const [confirmDeleteFamily, setConfirmDeleteFamily] = useState(false)
 
   // ── Invite ─────────────────────────────────────────────────────────────────
   const { data: invite, isLoading: loadingInvite } = useQuery({
@@ -132,20 +138,57 @@ export default function AdminPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (userId: string) => apiClient.deleteUser(userId),
+    mutationFn: ({ userId, password }: { userId: string; password: string }) =>
+      apiClient.deleteUser(userId, password),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['family-members'] })
       void queryClient.invalidateQueries({ queryKey: ['map-data', familyGroupId] })
       void queryClient.invalidateQueries({ queryKey: ['admin-badge'] })
       setConfirmDeleteId(null)
+      setDeletePassword('')
       toast('Member removed from the family tree', 'neutral')
     },
-    onError: () => toast('Failed to remove member', 'error'),
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to remove member'
+      toast(msg, 'error')
+    },
   })
 
   const handleDeleteClick = useCallback((id: string) => {
+    setDeletePassword('')
     setConfirmDeleteId((prev) => (prev === id ? null : id))
   }, [])
+
+  // ── Transfer ownership ─────────────────────────────────────────────────────
+  const transferMutation = useMutation({
+    mutationFn: (newHeadUserId: string) => apiClient.transferOwnership(familyGroupId!, newHeadUserId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['family-members'] })
+      void queryClient.invalidateQueries({ queryKey: ['map-data', familyGroupId] })
+      setTransferOpen(false)
+      setTransferTargetId(null)
+      toast('Ownership transferred. You are now a regular member.', 'success')
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Transfer failed'
+      toast(msg, 'error')
+    },
+  })
+
+  // ── Delete family ──────────────────────────────────────────────────────────
+  const deleteFamilyMutation = useMutation({
+    mutationFn: () => apiClient.deleteFamily(familyGroupId!),
+    onSuccess: () => {
+      toast('Family deleted', 'neutral')
+      useAuthStore.getState().clear()
+      router.replace('/login')
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to delete family'
+      toast(msg, 'error')
+      setConfirmDeleteFamily(false)
+    },
+  })
 
   // ── Leave requests ─────────────────────────────────────────────────────────
   const { data: leaveRequests = [] } = useQuery({
@@ -443,23 +486,7 @@ export default function AdminPage() {
                         </p>
                       )}
                     </div>
-                    {confirmDeleteId === member.id ? (
-                      <div className="flex gap-2 shrink-0">
-                        <button
-                          onClick={() => deleteMutation.mutate(member.id)}
-                          disabled={deleteMutation.isPending}
-                          className="px-3 py-1.5 text-xs font-medium bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50"
-                        >
-                          {deleteMutation.isPending ? 'Removing…' : 'Confirm'}
-                        </button>
-                        <button
-                          onClick={() => setConfirmDeleteId(null)}
-                          className="px-3 py-1.5 text-xs font-medium bg-stone-100 text-slate-600 rounded-lg hover:bg-stone-200"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
+                    {confirmDeleteId !== member.id && (
                       <button
                         onClick={() => handleDeleteClick(member.id)}
                         className="px-3 py-1.5 text-xs font-medium bg-red-50 text-red-600 rounded-lg hover:bg-red-100 shrink-0"
@@ -469,13 +496,119 @@ export default function AdminPage() {
                     )}
                   </div>
                   {confirmDeleteId === member.id && (
-                    <p className="text-xs text-red-500 mt-2">
-                      This will permanently delete {member.displayName} and all their data. This cannot be undone.
-                    </p>
+                    <div className="mt-3 space-y-2">
+                      <p className="text-xs text-red-500">
+                        Enter <strong>{member.displayName}&apos;s</strong> password to confirm removal. This cannot be undone.
+                      </p>
+                      <input
+                        autoFocus
+                        type="password"
+                        value={deletePassword}
+                        onChange={(e) => setDeletePassword(e.target.value)}
+                        placeholder="Their password"
+                        className="text-xs bg-stone-100 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-1 focus:ring-red-400"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => deleteMutation.mutate({ userId: member.id, password: deletePassword })}
+                          disabled={!deletePassword || deleteMutation.isPending}
+                          className="flex-1 py-1.5 text-xs font-medium bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50"
+                        >
+                          {deleteMutation.isPending ? 'Removing…' : 'Confirm Remove'}
+                        </button>
+                        <button
+                          onClick={() => { setConfirmDeleteId(null); setDeletePassword('') }}
+                          className="flex-1 py-1.5 text-xs font-medium bg-stone-100 text-slate-600 rounded-lg hover:bg-stone-200"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </li>
               ))}
             </ul>
+          </div>
+        )}
+
+        {/* ── Transfer ownership ────────────────────────────────────────── */}
+        <div className="bg-white rounded-2xl border border-stone-100 p-5">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Transfer Ownership</p>
+          <p className="text-xs text-slate-400 mb-3">
+            Hand the Family Head role to another active member. You will become a regular member.
+          </p>
+          {!transferOpen ? (
+            <button
+              onClick={() => setTransferOpen(true)}
+              className="w-full py-2 text-xs font-medium text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-xl transition-colors"
+            >
+              Transfer ownership…
+            </button>
+          ) : (
+            <div className="space-y-3">
+              <select
+                value={transferTargetId ?? ''}
+                onChange={(e) => setTransferTargetId(e.target.value || null)}
+                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-400"
+              >
+                <option value="" disabled>Select new Family Head…</option>
+                {members.map((m: User) => (
+                  <option key={m.id} value={m.id}>{m.displayName}</option>
+                ))}
+              </select>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => transferTargetId && transferMutation.mutate(transferTargetId)}
+                  disabled={!transferTargetId || transferMutation.isPending}
+                  className="flex-1 py-2 text-xs font-medium bg-brand-500 text-white rounded-xl hover:bg-brand-600 disabled:opacity-50 transition-colors"
+                >
+                  {transferMutation.isPending ? 'Transferring…' : 'Confirm Transfer'}
+                </button>
+                <button
+                  onClick={() => { setTransferOpen(false); setTransferTargetId(null) }}
+                  className="flex-1 py-2 text-xs font-medium bg-stone-100 text-slate-600 rounded-xl hover:bg-stone-200 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Danger zone ───────────────────────────────────────────────────── */}
+        {members.length === 0 && (
+          <div className="bg-white rounded-2xl border border-red-100 p-5">
+            <p className="text-xs font-semibold text-red-400 uppercase tracking-wide mb-2">Danger Zone</p>
+            <p className="text-xs text-slate-400 mb-3">
+              You are the only member remaining. You can permanently delete this family.
+            </p>
+            {!confirmDeleteFamily ? (
+              <button
+                onClick={() => setConfirmDeleteFamily(true)}
+                className="w-full py-2 text-xs font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-xl transition-colors"
+              >
+                Delete family…
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-red-500 font-medium">This will permanently delete the family and all its data. This cannot be undone.</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => deleteFamilyMutation.mutate()}
+                    disabled={deleteFamilyMutation.isPending}
+                    className="flex-1 py-2 text-xs font-medium bg-red-500 text-white rounded-xl hover:bg-red-600 disabled:opacity-50 transition-colors"
+                  >
+                    {deleteFamilyMutation.isPending ? 'Deleting…' : 'Delete Forever'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteFamily(false)}
+                    className="flex-1 py-2 text-xs font-medium bg-stone-100 text-slate-600 rounded-xl hover:bg-stone-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

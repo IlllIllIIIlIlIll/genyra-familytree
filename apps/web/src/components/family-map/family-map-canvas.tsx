@@ -21,7 +21,7 @@ import { useRouter } from 'next/navigation'
 import { toPng } from 'html-to-image'
 import { apiClient } from '@/lib/api-client'
 import { saveTokens } from '@/lib/auth'
-import { useMapUIStore, useAuthStore } from '@/store/map-store'
+import { useMapUIStore, useAuthStore, useToastStore } from '@/store/map-store'
 import { CANVAS, COLOR } from '@/lib/design-tokens'
 import { PersonNodeComponent } from './person-node'
 import { RelationshipEdgeComponent } from './relationship-edge'
@@ -161,6 +161,9 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   const [nameDraft, setNameDraft]                     = useState('')
   const [isNotifPanelOpen, setIsNotifPanelOpen]       = useState(false)
   const [isFamilySwitcherOpen, setIsFamilySwitcherOpen] = useState(false)
+  const [joinFamilyOpen, setJoinFamilyOpen]             = useState(false)
+  const [joinInviteCode, setJoinInviteCode]             = useState('')
+  const toast = useToastStore((s) => s.toast)
 
   // Notification last-read timestamp stored per user in localStorage
   const notifKey = currentUserId ? `notif_last_read_${currentUserId}` : null
@@ -210,6 +213,21 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
       void queryClient.invalidateQueries({ queryKey: ['map-data'] })
       void queryClient.invalidateQueries({ queryKey: ['notifications'] })
       setIsFamilySwitcherOpen(false)
+    },
+  })
+
+  const joinAdditionalMutation = useMutation({
+    mutationFn: (code: string) => apiClient.joinAdditionalFamily(code),
+    onSuccess: (res) => {
+      toast(res.message, 'success')
+      setJoinFamilyOpen(false)
+      setJoinInviteCode('')
+      setIsFamilySwitcherOpen(false)
+      void queryClient.invalidateQueries({ queryKey: ['my-families'] })
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to join family'
+      toast(msg, 'error')
     },
   })
 
@@ -538,37 +556,77 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
                     </svg>
                   </button>
                 )}
-                {families.length > 1 && (
-                  <div className="relative">
-                    <button
-                      onClick={() => setIsFamilySwitcherOpen((v) => !v)}
-                      className="p-1 rounded text-slate-300 hover:text-slate-500 transition-colors shrink-0"
-                      title="Switch family"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
-                    {isFamilySwitcherOpen && (
-                      <>
-                        <div className="fixed inset-0 z-[40]" onClick={() => setIsFamilySwitcherOpen(false)} />
-                        <div className="absolute left-0 top-7 z-[41] w-52 bg-white rounded-xl shadow-lg border border-stone-100 py-1 overflow-hidden">
-                          {families.map((f) => (
-                            <button
-                              key={f.id}
-                              disabled={f.id === familyGroupId || switchFamilyMutation.isPending}
-                              onClick={() => switchFamilyMutation.mutate(f.id)}
-                              className="w-full text-left px-3 py-2.5 text-sm hover:bg-stone-50 disabled:opacity-50 flex items-center justify-between gap-2"
-                            >
-                              <span className="truncate font-medium text-slate-700">{f.name}</span>
-                              <span className="text-[10px] text-slate-400 shrink-0 uppercase tracking-wide">{f.role === 'FAMILY_HEAD' ? 'Head' : 'Member'}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
+                <div className="relative">
+                  <button
+                    onClick={() => setIsFamilySwitcherOpen((v) => !v)}
+                    className="p-1 rounded text-slate-300 hover:text-slate-500 transition-colors shrink-0"
+                    title="Switch family"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                  {isFamilySwitcherOpen && (
+                    <>
+                      <div className="fixed inset-0 z-[40]" onClick={() => { setIsFamilySwitcherOpen(false); setJoinFamilyOpen(false) }} />
+                      <div className="absolute left-0 top-7 z-[41] w-56 bg-white rounded-xl shadow-lg border border-stone-100 py-1 overflow-hidden">
+                        {families.map((f) => (
+                          <button
+                            key={f.id}
+                            disabled={f.id === familyGroupId || switchFamilyMutation.isPending}
+                            onClick={() => switchFamilyMutation.mutate(f.id)}
+                            className="w-full text-left px-3 py-2.5 text-sm hover:bg-stone-50 disabled:opacity-50 flex items-center justify-between gap-2"
+                          >
+                            <span className="truncate font-medium text-slate-700">{f.name}</span>
+                            <span className="text-[10px] text-slate-400 shrink-0 uppercase tracking-wide">{f.role === 'FAMILY_HEAD' ? 'Head' : 'Member'}</span>
+                          </button>
+                        ))}
+                        {families.length < 3 && (
+                          <>
+                            {families.length > 0 && <div className="border-t border-stone-100 mx-2 my-1" />}
+                            {!joinFamilyOpen ? (
+                              <button
+                                onClick={() => setJoinFamilyOpen(true)}
+                                className="w-full text-left px-3 py-2.5 text-sm text-brand-600 hover:bg-brand-50 flex items-center gap-2"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0">
+                                  <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
+                                </svg>
+                                Join another family
+                              </button>
+                            ) : (
+                              <div className="px-3 py-2 space-y-2">
+                                <input
+                                  autoFocus
+                                  value={joinInviteCode}
+                                  onChange={(e) => setJoinInviteCode(e.target.value.toUpperCase())}
+                                  placeholder="Invite code"
+                                  autoCapitalize="characters"
+                                  className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-400 font-mono tracking-wider"
+                                />
+                                <div className="flex gap-1.5">
+                                  <button
+                                    onClick={() => joinAdditionalMutation.mutate(joinInviteCode)}
+                                    disabled={!joinInviteCode || joinAdditionalMutation.isPending}
+                                    className="flex-1 py-1.5 text-xs font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 disabled:opacity-50"
+                                  >
+                                    {joinAdditionalMutation.isPending ? 'Joining…' : 'Join'}
+                                  </button>
+                                  <button
+                                    onClick={() => { setJoinFamilyOpen(false); setJoinInviteCode('') }}
+                                    className="flex-1 py-1.5 text-xs font-medium bg-stone-100 text-slate-600 rounded-lg hover:bg-stone-200"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
               </>
             )}
           </div>

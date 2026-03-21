@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common'
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common'
+import * as argon2 from 'argon2'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import type { User, MemberStatus, PersonNode } from '@genyra/shared-types'
@@ -22,11 +23,11 @@ export class UsersService {
   async findActiveByGroup(requestingUserId: string): Promise<User[]> {
     const me = await this.prisma.user.findUnique({
       where:   { id: requestingUserId },
-      include: { personNodes: { where: { familyGroupId: { not: null } }, select: { familyGroupId: true }, take: 1 } },
+      include: { personNodes: { where: { familyGroupId: { not: null }, role: 'FAMILY_HEAD' }, select: { familyGroupId: true, role: true }, take: 1 } },
     })
-    if (me?.role !== 'FAMILY_HEAD') throw new ForbiddenException('Only Family Head can list members')
-    const familyGroupId = me.personNodes[0]?.familyGroupId
-    if (!familyGroupId) return []
+    const familyGroupId = me?.personNodes[0]?.familyGroupId
+    if (!familyGroupId) throw new ForbiddenException('Only Family Head can list members')
+    if (me?.personNodes[0]?.role !== 'FAMILY_HEAD') throw new ForbiddenException('Only Family Head can list members')
 
     const users = await this.prisma.user.findMany({
       where: {
@@ -42,15 +43,19 @@ export class UsersService {
       .map((u) => this.toUserDto(u, u.personNodes[0]!))
   }
 
-  async deleteUser(targetId: string, requestingUserId: string): Promise<void> {
-    const [requester, target] = await Promise.all([
-      this.prisma.user.findUnique({ where: { id: requestingUserId } }),
+  async deleteUser(targetId: string, requestingUserId: string, targetPassword: string): Promise<void> {
+    const [requesterNode, target] = await Promise.all([
+      this.prisma.personNode.findFirst({ where: { userId: requestingUserId, role: 'FAMILY_HEAD', familyGroupId: { not: null } } }),
       this.prisma.user.findUnique({ where: { id: targetId }, include: { personNodes: { take: 1 } } }),
     ])
-    if (requester?.role !== 'FAMILY_HEAD') throw new ForbiddenException('Only Family Head can remove members')
+    if (!requesterNode) throw new ForbiddenException('Only Family Head can remove members')
     if (!target) throw new NotFoundException('User not found')
     if (target.id === requestingUserId) throw new ForbiddenException('You cannot remove yourself')
     if (target.role === 'FAMILY_HEAD') throw new ForbiddenException('Cannot remove another Family Head')
+
+    // Verify the target member's password
+    const valid = await argon2.verify(target.passwordHash, targetPassword)
+    if (!valid) throw new UnauthorizedException('Incorrect password for that member')
 
     await this.prisma.$transaction(async (tx) => {
       if (target.personNodes[0]) {
@@ -130,11 +135,10 @@ export class UsersService {
   async getPendingCount(requestingUserId: string): Promise<{ pendingCount: number; inviteExpired: boolean }> {
     const user = await this.prisma.user.findUnique({
       where:   { id: requestingUserId },
-      include: { personNodes: { where: { familyGroupId: { not: null } }, select: { familyGroupId: true }, take: 1 } },
+      include: { personNodes: { where: { familyGroupId: { not: null }, role: 'FAMILY_HEAD' }, select: { familyGroupId: true, role: true }, take: 1 } },
     })
-    if (user?.role !== 'FAMILY_HEAD') return { pendingCount: 0, inviteExpired: false }
-    const familyGroupId = user.personNodes[0]?.familyGroupId
-    if (!familyGroupId) return { pendingCount: 0, inviteExpired: false }
+    const familyGroupId = user?.personNodes[0]?.familyGroupId
+    if (!familyGroupId || user?.personNodes[0]?.role !== 'FAMILY_HEAD') return { pendingCount: 0, inviteExpired: false }
 
     const [pendingUsers, pendingNodes, invite] = await Promise.all([
       this.prisma.user.count({ where: { status: 'PENDING_APPROVAL', personNodes: { some: { familyGroupId } } } }),
@@ -151,11 +155,11 @@ export class UsersService {
   async findPendingNodesByGroup(requestingUserId: string): Promise<PersonNode[]> {
     const user = await this.prisma.user.findUnique({
       where: { id: requestingUserId },
-      include: { personNodes: { where: { familyGroupId: { not: null } }, select: { familyGroupId: true }, take: 1 } },
+      include: { personNodes: { where: { familyGroupId: { not: null }, role: 'FAMILY_HEAD' }, select: { familyGroupId: true, role: true }, take: 1 } },
     })
-    if (!user || user.role !== 'FAMILY_HEAD') return []
+    if (!user) return []
     const familyGroupId = user.personNodes[0]?.familyGroupId
-    if (!familyGroupId) return []
+    if (!familyGroupId || user.personNodes[0]?.role !== 'FAMILY_HEAD') return []
 
     // Exclude nodes whose linked user is already PENDING_APPROVAL (already shown in member list)
     const nodes = await this.prisma.personNode.findMany({
@@ -190,10 +194,10 @@ export class UsersService {
   }
 
   async updateNik(targetUserId: string, newNik: string, requestingUserId: string): Promise<User> {
-    const requester = await this.prisma.user.findUnique({
-      where: { id: requestingUserId },
+    const requesterNode = await this.prisma.personNode.findFirst({
+      where: { userId: requestingUserId, role: 'FAMILY_HEAD', familyGroupId: { not: null } },
     })
-    if (requester?.role !== 'FAMILY_HEAD') throw new ForbiddenException('Only Family Head can change NIK')
+    if (!requesterNode) throw new ForbiddenException('Only Family Head can change NIK')
     if (targetUserId === requestingUserId) throw new ForbiddenException('Use the profile page to update your own NIK through the standard process')
 
     // Validate NIK format (16 digits)

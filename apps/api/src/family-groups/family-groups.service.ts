@@ -194,6 +194,64 @@ export class FamilyGroupsService {
     return { message: 'Successfully joined family group. Awaiting Family Head approval.' }
   }
 
+  async joinAdditional(
+    inviteCode: string,
+    requestingUserId: string,
+  ): Promise<{ message: string }> {
+    const invite = await this.prisma.invite.findUnique({ where: { code: inviteCode } })
+    if (!invite || invite.status !== 'UNUSED' || invite.expiresAt < new Date()) {
+      throw new BadRequestException('Invalid or expired invite code')
+    }
+
+    const targetFamilyId = invite.familyGroupId
+
+    // Already in this family?
+    const existing = await this.prisma.personNode.findFirst({
+      where: { userId: requestingUserId, familyGroupId: targetFamilyId },
+    })
+    if (existing) throw new ConflictException('You are already a member of this family')
+
+    // Max 3 families
+    const totalFamilies = await this.prisma.personNode.count({
+      where: { userId: requestingUserId },
+    })
+    if (totalFamilies >= 3) throw new BadRequestException('You are already in 3 families. The maximum is 3.')
+
+    // Cannot own more than 1 — just joining, role will be FAMILY_MEMBER
+
+    // Get user's info to copy to new PersonNode
+    const user = await this.prisma.user.findUnique({
+      where: { id: requestingUserId },
+      include: { personNodes: { take: 1 } },
+    })
+    if (!user) throw new NotFoundException('User not found')
+    const sourceNode = user.personNodes[0]
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.personNode.create({
+        data: {
+          userId: requestingUserId,
+          familyGroupId: targetFamilyId,
+          displayName: sourceNode?.displayName ?? user.nik,
+          gender: sourceNode?.gender ?? null,
+          surname: sourceNode?.surname ?? null,
+          birthDate: sourceNode?.birthDate ?? null,
+          birthPlace: sourceNode?.birthPlace ?? null,
+          bio: sourceNode?.bio ?? null,
+          avatarUrl: sourceNode?.avatarUrl ?? null,
+          pendingApproval: true,
+          role: 'FAMILY_MEMBER',
+        },
+      })
+      await tx.invite.update({
+        where: { id: invite.id },
+        data: { status: 'USED', usedAt: new Date() },
+      })
+    })
+
+    return { message: 'Request sent. Awaiting Family Head approval.' }
+  }
+
   async getMapData(groupId: string, requestingUserId: string): Promise<MapData> {
     const memberNode = await this.prisma.personNode.findFirst({
       where: { userId: requestingUserId, familyGroupId: groupId },
@@ -271,6 +329,88 @@ export class FamilyGroupsService {
     return this.toFamilyGroupDto(group)
   }
 
+  // ── Transfer Ownership ────────────────────────────────────────────────────
+
+  async transferOwnership(
+    requestingUserId: string,
+    familyGroupId: string,
+    newHeadUserId: string,
+  ): Promise<{ message: string }> {
+    const currentHeadNode = await this.prisma.personNode.findFirst({
+      where: { userId: requestingUserId, familyGroupId },
+    })
+    if (currentHeadNode?.role !== 'FAMILY_HEAD') {
+      throw new ForbiddenException('Only the Family Head can transfer ownership')
+    }
+
+    const newHeadNode = await this.prisma.personNode.findFirst({
+      where: { userId: newHeadUserId, familyGroupId, pendingApproval: false },
+    })
+    if (!newHeadNode) throw new NotFoundException('New owner is not an active member of this family')
+    if (newHeadNode.role === 'FAMILY_HEAD') throw new BadRequestException('That member is already the Family Head')
+
+    // Check new head is not already a head of another family (max 1 owned)
+    const alreadyOwns = await this.prisma.personNode.count({
+      where: { userId: newHeadUserId, role: 'FAMILY_HEAD', familyGroupId: { not: familyGroupId } },
+    })
+    if (alreadyOwns >= 1) throw new BadRequestException('That member already owns a different family')
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.personNode.update({ where: { id: currentHeadNode.id }, data: { role: 'FAMILY_MEMBER' } })
+      await tx.personNode.update({ where: { id: newHeadNode.id }, data: { role: 'FAMILY_HEAD' } })
+      await tx.user.update({ where: { id: requestingUserId }, data: { role: 'FAMILY_MEMBER' } })
+      await tx.user.update({ where: { id: newHeadUserId }, data: { role: 'FAMILY_HEAD' } })
+    })
+
+    await this.prisma.notification.create({
+      data: {
+        familyGroupId,
+        type: 'OWNERSHIP_TRANSFER',
+        message: `${currentHeadNode.displayName} has transferred Family Head ownership to ${newHeadNode.displayName}.`,
+        personNodeId: newHeadNode.id,
+      },
+    })
+    await this.notifications.pruneForFamily(familyGroupId)
+
+    return { message: 'Ownership transferred successfully.' }
+  }
+
+  // ── Family Deletion ────────────────────────────────────────────────────────
+
+  async deleteFamily(requestingUserId: string, familyGroupId: string): Promise<{ message: string }> {
+    const personNode = await this.prisma.personNode.findFirst({
+      where: { userId: requestingUserId, familyGroupId },
+    })
+    if (personNode?.role !== 'FAMILY_HEAD') {
+      throw new ForbiddenException('Only the Family Head can delete the family')
+    }
+
+    // Only allowed if no other members remain
+    const memberCount = await this.prisma.personNode.count({
+      where: {
+        familyGroupId,
+        userId: { not: null },
+        NOT: { userId: requestingUserId },
+      },
+    })
+    if (memberCount > 0) {
+      throw new BadRequestException('Cannot delete a family while other members remain. Remove all members first.')
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      // Cascade: delete relationships, nodes, invites, notifications, leave requests, then family
+      await tx.relationshipEdge.deleteMany({ where: { source: { familyGroupId } } })
+      await tx.personNode.deleteMany({ where: { familyGroupId } })
+      await tx.invite.deleteMany({ where: { familyGroupId } })
+      await tx.notification.deleteMany({ where: { familyGroupId } })
+      await tx.leaveRequest.deleteMany({ where: { familyGroupId } })
+      await tx.familyGroup.delete({ where: { id: familyGroupId } })
+      await tx.user.update({ where: { id: requestingUserId }, data: { role: 'FAMILY_MEMBER' } })
+    })
+
+    return { message: 'Family deleted successfully.' }
+  }
+
   // ── Leave Request Feature ──────────────────────────────────────────────────
 
   async requestLeave(userId: string, familyGroupId: string): Promise<{ message: string }> {
@@ -280,6 +420,17 @@ export class FamilyGroupsService {
     if (!personNode) throw new NotFoundException('You are not a member of this family')
     if (personNode.role === 'FAMILY_HEAD') {
       throw new ForbiddenException('Family heads cannot leave their own family. Transfer ownership first or delete the family.')
+    }
+
+    // Block leaving if user has children in this family
+    const hasChildren = await this.prisma.relationshipEdge.findFirst({
+      where: {
+        relationshipType: 'PARENT_CHILD',
+        source: { userId, familyGroupId },
+      },
+    })
+    if (hasChildren) {
+      throw new BadRequestException('Cannot leave a family while you have children registered in it')
     }
 
     // Check if already has a pending request

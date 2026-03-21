@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards, HttpCode, HttpStatus } from '@nestjs/common'
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, HttpCode, HttpStatus } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { FamilyGroupsService } from './family-groups.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
@@ -38,6 +38,16 @@ export class FamilyGroupsController {
     return this.familyGroupsService.createWithParents(dto, user.sub)
   }
 
+  @Post('join-additional')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Join an additional family (already in another family)' })
+  async joinAdditional(
+    @Body() body: { inviteCode: string },
+    @CurrentUser() user: JwtPayload,
+  ): Promise<{ message: string }> {
+    return this.familyGroupsService.joinAdditional(body.inviteCode, user.sub)
+  }
+
   @Post('join')
   @ApiOperation({ summary: 'Join an existing family group via invite code' })
   async join(
@@ -72,6 +82,27 @@ export class FamilyGroupsController {
     @CurrentUser() user: JwtPayload,
   ): Promise<MapData> {
     return this.familyGroupsService.getMapData(id, user.sub)
+  }
+
+  @Post(':id/transfer-ownership')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Transfer Family Head ownership to another member' })
+  async transferOwnership(
+    @Param('id') id: string,
+    @Body() body: { newHeadUserId: string },
+    @CurrentUser() user: JwtPayload,
+  ): Promise<{ message: string }> {
+    return this.familyGroupsService.transferOwnership(user.sub, id, body.newHeadUserId)
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete the family (Family Head only, must be last member)' })
+  async deleteFamily(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<{ message: string }> {
+    return this.familyGroupsService.deleteFamily(user.sub, id)
   }
 
   @Post(':id/leave')

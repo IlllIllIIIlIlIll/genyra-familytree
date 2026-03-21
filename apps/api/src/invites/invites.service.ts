@@ -28,13 +28,12 @@ export class InvitesService {
 
   /** Returns the single active invite for the family, creating one if none exists. */
   async getOrCreateForFamily(requestingUserId: string): Promise<Invite> {
-    const user = await this.prisma.user.findUnique({
-      where:   { id: requestingUserId },
-      include: { personNodes: { where: { familyGroupId: { not: null } }, select: { familyGroupId: true }, take: 1 } },
+    const headNode = await this.prisma.personNode.findFirst({
+      where: { userId: requestingUserId, role: 'FAMILY_HEAD', familyGroupId: { not: null } },
+      select: { familyGroupId: true },
     })
-    if (user?.role !== 'FAMILY_HEAD') throw new ForbiddenException('Only Family Head can view invite codes')
-    const familyGroupId = user.personNodes[0]?.familyGroupId
-    if (!familyGroupId) throw new ForbiddenException('User has no family group')
+    if (!headNode?.familyGroupId) throw new ForbiddenException('Only Family Head can view invite codes')
+    const familyGroupId = headNode.familyGroupId
 
     // Return the most recent invite regardless of status; only auto-create on first ever access
     const existing = await this.prisma.invite.findFirst({
@@ -52,13 +51,12 @@ export class InvitesService {
 
   /** Refreshes (or creates) the family invite: new code, reset to UNUSED, +7 day expiry. */
   async refreshForFamily(requestingUserId: string): Promise<Invite> {
-    const user = await this.prisma.user.findUnique({
-      where:   { id: requestingUserId },
-      include: { personNodes: { where: { familyGroupId: { not: null } }, select: { familyGroupId: true }, take: 1 } },
+    const headNode = await this.prisma.personNode.findFirst({
+      where: { userId: requestingUserId, role: 'FAMILY_HEAD', familyGroupId: { not: null } },
+      select: { familyGroupId: true },
     })
-    if (user?.role !== 'FAMILY_HEAD') throw new ForbiddenException('Only Family Head can refresh invites')
-    const familyGroupId = user.personNodes[0]?.familyGroupId
-    if (!familyGroupId) throw new ForbiddenException('User has no family group')
+    if (!headNode?.familyGroupId) throw new ForbiddenException('Only Family Head can refresh invites')
+    const familyGroupId = headNode.familyGroupId
 
     const code      = await uniqueCode(this.prisma)
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)

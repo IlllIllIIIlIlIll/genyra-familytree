@@ -154,6 +154,9 @@ export function RegisterForm({ onSuccess }: Props) {
           />
         )}
 
+        {/* Divider */}
+        <div className="border-t border-stone-100" />
+
         {/* Shared personal info */}
         <Input
           id="displayName"
