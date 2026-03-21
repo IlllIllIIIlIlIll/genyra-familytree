@@ -442,6 +442,14 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   )
 
   const selectedNode = mapData?.nodes.find((n) => n.id === selectedNodeId)
+  const hasSpouse = selectedNode
+    ? (mapData?.edges ?? []).some(
+        (e) =>
+          e.relationshipType === 'SPOUSE' &&
+          e.divorceDate === null &&
+          (e.sourceId === selectedNode.id || e.targetId === selectedNode.id),
+      )
+    : false
 
   if (isLoading) {
     return (
@@ -625,7 +633,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
         {/* ── Profile card (hidden in clean view, closes via onPaneClick) ───── */}
         {!isCleanView && isProfilePanelOpen && selectedNode && (
           <div className="absolute inset-x-0 bottom-0 z-10">
-            <ProfileCard node={selectedNode} />
+            <ProfileCard node={selectedNode} hasSpouse={hasSpouse} />
           </div>
         )}
 

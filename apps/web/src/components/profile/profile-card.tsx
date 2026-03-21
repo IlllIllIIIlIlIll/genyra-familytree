@@ -12,9 +12,10 @@ import type { PersonNode } from '@genyra/shared-types'
 
 interface ProfileCardProps {
   node: PersonNode
+  hasSpouse?: boolean
 }
 
-export function ProfileCard({ node }: ProfileCardProps) {
+export function ProfileCard({ node, hasSpouse = false }: ProfileCardProps) {
   const router      = useRouter()
   const authUserId  = useAuthStore((s) => s.userId)
   const [showAddChild, setShowAddChild] = useState(false)
@@ -67,7 +68,7 @@ export function ProfileCard({ node }: ProfileCardProps) {
         >
           View Full Profile
         </Button>
-        {node.userId === authUserId && (
+        {node.userId === authUserId && hasSpouse && (
           <Button variant="secondary" className="w-full" onClick={() => setShowAddChild(true)}>
             Add child
           </Button>

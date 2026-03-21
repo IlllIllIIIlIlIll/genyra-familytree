@@ -186,7 +186,6 @@ async function main() {
   // Child of Emin + Ono
   const diding = await member({
     nik: '3273011206680016',
-    role: 'FAMILY_HEAD',
     displayName: 'Diding Saefudin', surname: 'Diding',
     gender: 'MALE',   birthDate: new Date('1968-06-12'), birthPlace: 'Bandung',
   })
@@ -199,6 +198,7 @@ async function main() {
   // Children of Emin + Yono
   const andi = await member({
     nik: '3273010703720017',
+    role: 'FAMILY_HEAD',
     displayName: 'Andi Budiono', surname: 'Endis',
     gender: 'MALE',   birthDate: new Date('1972-03-07'), birthPlace: 'Bandung',
   })
@@ -390,7 +390,7 @@ async function main() {
   console.log('  Gen 4 : Naya')
   console.log('')
   console.log('  37 family members, all with NIK user accounts (password: password123)')
-  console.log('  Family Head login: NIK 3273011206680016 / password123 (Diding Saefudin)')
+  console.log('  Family Head login: NIK 3273010703720017 / password123 (Andi Budiono)')
 }
 
 main()
