@@ -62,3 +62,21 @@ export const AdminBadgeSchema = z.object({
   inviteExpired:  z.boolean(),
 })
 export type AdminBadge = z.infer<typeof AdminBadgeSchema>
+
+export const LeaveRequestSchema = z.object({
+  id:            z.string(),
+  userId:        z.string(),
+  displayName:   z.string(),
+  nik:           z.string(),
+  familyGroupId: z.string(),
+  status:        z.enum(['PENDING', 'APPROVED', 'REJECTED']),
+  createdAt:     z.string().datetime(),
+})
+export type LeaveRequest = z.infer<typeof LeaveRequestSchema>
+
+export const FamilySummarySchema = z.object({
+  id:   z.string(),
+  name: z.string(),
+  role: z.string(),
+})
+export type FamilySummary = z.infer<typeof FamilySummarySchema>

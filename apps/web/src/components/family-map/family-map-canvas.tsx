@@ -6,7 +6,6 @@ import {
   Panel,
   Background,
   BackgroundVariant,
-  Controls,
   MiniMap,
   useNodesState,
   useEdgesState,
@@ -21,6 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toPng } from 'html-to-image'
 import { apiClient } from '@/lib/api-client'
+import { saveTokens } from '@/lib/auth'
 import { useMapUIStore, useAuthStore } from '@/store/map-store'
 import { CANVAS, COLOR } from '@/lib/design-tokens'
 import { PersonNodeComponent } from './person-node'
@@ -146,16 +146,21 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
 
   const router        = useRouter()
   const clearAuth     = useAuthStore((s) => s.clear)
+  const setTokens     = useAuthStore((s) => s.setTokens)
+  const setUser       = useAuthStore((s) => s.setUser)
+  const setFamilies   = useAuthStore((s) => s.setFamilies)
+  const families      = useAuthStore((s) => s.families)
   const currentUserId = useAuthStore((s) => s.userId)
   const role          = useAuthStore((s) => s.role)
   const isFamilyHead  = role === 'FAMILY_HEAD'
   const canvasRef     = useRef<HTMLDivElement>(null)
   const longPressTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressNodeId = useRef<string | null>(null)
-  const [minimapSize, setMinimapSize]         = useState(getMinimapSize)
-  const [isEditingName, setIsEditingName]     = useState(false)
-  const [nameDraft, setNameDraft]             = useState('')
-  const [isNotifPanelOpen, setIsNotifPanelOpen] = useState(false)
+  const [minimapSize, setMinimapSize]                 = useState(getMinimapSize)
+  const [isEditingName, setIsEditingName]             = useState(false)
+  const [nameDraft, setNameDraft]                     = useState('')
+  const [isNotifPanelOpen, setIsNotifPanelOpen]       = useState(false)
+  const [isFamilySwitcherOpen, setIsFamilySwitcherOpen] = useState(false)
 
   // Notification last-read timestamp stored per user in localStorage
   const notifKey = currentUserId ? `notif_last_read_${currentUserId}` : null
@@ -182,6 +187,31 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   }, [notifKey])
 
   const handleCloseNotif = useCallback(() => setIsNotifPanelOpen(false), [])
+
+  // ── Family switcher ─────────────────────────────────────────────────────────
+
+  const { data: fetchedFamilies } = useQuery({
+    queryKey: ['my-families'],
+    queryFn:  () => apiClient.getMyFamilies(),
+    enabled:  !!currentUserId,
+  })
+
+  useEffect(() => {
+    if (fetchedFamilies) setFamilies(fetchedFamilies)
+  }, [fetchedFamilies, setFamilies])
+
+  const switchFamilyMutation = useMutation({
+    mutationFn: (fid: string) => apiClient.switchFamily(fid),
+    onSuccess: (tokens) => {
+      const payload = JSON.parse(atob(tokens.accessToken.split('.')[1]!)) as { sub: string; role: string; fid: string }
+      saveTokens(tokens.accessToken, tokens.refreshToken)
+      setTokens(tokens)
+      setUser({ userId: payload.sub, familyGroupId: payload.fid, role: payload.role })
+      void queryClient.invalidateQueries({ queryKey: ['map-data'] })
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      setIsFamilySwitcherOpen(false)
+    },
+  })
 
   useEffect(() => {
     const update = () => setMinimapSize(getMinimapSize())
@@ -508,6 +538,37 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
                     </svg>
                   </button>
                 )}
+                {families.length > 1 && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setIsFamilySwitcherOpen((v) => !v)}
+                      className="p-1 rounded text-slate-300 hover:text-slate-500 transition-colors shrink-0"
+                      title="Switch family"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+                    {isFamilySwitcherOpen && (
+                      <>
+                        <div className="fixed inset-0 z-[40]" onClick={() => setIsFamilySwitcherOpen(false)} />
+                        <div className="absolute left-0 top-7 z-[41] w-52 bg-white rounded-xl shadow-lg border border-stone-100 py-1 overflow-hidden">
+                          {families.map((f) => (
+                            <button
+                              key={f.id}
+                              disabled={f.id === familyGroupId || switchFamilyMutation.isPending}
+                              onClick={() => switchFamilyMutation.mutate(f.id)}
+                              className="w-full text-left px-3 py-2.5 text-sm hover:bg-stone-50 disabled:opacity-50 flex items-center justify-between gap-2"
+                            >
+                              <span className="truncate font-medium text-slate-700">{f.name}</span>
+                              <span className="text-[10px] text-slate-400 shrink-0 uppercase tracking-wide">{f.role === 'FAMILY_HEAD' ? 'Head' : 'Member'}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -603,9 +664,6 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
             </Panel>
           )}
 
-          {!isCleanView && (
-            <Controls className="!shadow-sm !border-stone-200" showInteractive={false} />
-          )}
           {!isCleanView && (
             <MiniMap
               nodeColor={COLOR.MINIMAP_NODE}

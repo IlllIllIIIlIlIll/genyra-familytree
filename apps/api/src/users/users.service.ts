@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common'
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
 import type { User, MemberStatus, PersonNode } from '@genyra/shared-types'
@@ -13,37 +13,39 @@ export class UsersService {
   async findById(id: string): Promise<User> {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      include: { personNode: true },
+      include: { personNodes: { take: 1 } },
     })
-    if (!user || !user.personNode) throw new NotFoundException('User not found')
-    return this.toUserDto(user, user.personNode)
+    if (!user || !user.personNodes[0]) throw new NotFoundException('User not found')
+    return this.toUserDto(user, user.personNodes[0])
   }
 
   async findActiveByGroup(requestingUserId: string): Promise<User[]> {
     const me = await this.prisma.user.findUnique({
       where:   { id: requestingUserId },
-      include: { personNode: { select: { familyGroupId: true } } },
+      include: { personNodes: { where: { familyGroupId: { not: null } }, select: { familyGroupId: true }, take: 1 } },
     })
     if (me?.role !== 'FAMILY_HEAD') throw new ForbiddenException('Only Family Head can list members')
-    const familyGroupId = me.personNode?.familyGroupId
+    const familyGroupId = me.personNodes[0]?.familyGroupId
     if (!familyGroupId) return []
 
     const users = await this.prisma.user.findMany({
       where: {
-        status:     { not: 'PENDING_APPROVAL' },
-        personNode: { familyGroupId },
-        NOT:        { id: requestingUserId },   // exclude self
+        status:      { not: 'PENDING_APPROVAL' },
+        personNodes: { some: { familyGroupId } },
+        NOT:         { id: requestingUserId },   // exclude self
       },
-      include:  { personNode: true },
+      include:  { personNodes: { where: { familyGroupId }, take: 1 } },
       orderBy:  { createdAt: 'asc' },
     })
-    return users.map((u) => this.toUserDto(u, u.personNode!))
+    return users
+      .filter((u) => u.personNodes[0])
+      .map((u) => this.toUserDto(u, u.personNodes[0]!))
   }
 
   async deleteUser(targetId: string, requestingUserId: string): Promise<void> {
     const [requester, target] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: requestingUserId } }),
-      this.prisma.user.findUnique({ where: { id: targetId }, include: { personNode: true } }),
+      this.prisma.user.findUnique({ where: { id: targetId }, include: { personNodes: { take: 1 } } }),
     ])
     if (requester?.role !== 'FAMILY_HEAD') throw new ForbiddenException('Only Family Head can remove members')
     if (!target) throw new NotFoundException('User not found')
@@ -51,8 +53,8 @@ export class UsersService {
     if (target.role === 'FAMILY_HEAD') throw new ForbiddenException('Cannot remove another Family Head')
 
     await this.prisma.$transaction(async (tx) => {
-      if (target.personNode) {
-        await tx.personNode.delete({ where: { id: target.personNode.id } })
+      if (target.personNodes[0]) {
+        await tx.personNode.delete({ where: { id: target.personNodes[0].id } })
       }
       await tx.user.delete({ where: { id: targetId } })
     })
@@ -61,26 +63,28 @@ export class UsersService {
   async findPendingByGroup(familyGroupId: string): Promise<User[]> {
     const users = await this.prisma.user.findMany({
       where: {
-        status: 'PENDING_APPROVAL',
-        personNode: { familyGroupId },
+        status:      'PENDING_APPROVAL',
+        personNodes: { some: { familyGroupId } },
       },
-      include: { personNode: true },
+      include: { personNodes: { where: { familyGroupId }, take: 1 } },
     })
-    return users.map((u) => this.toUserDto(u, u.personNode!))
+    return users
+      .filter((u) => u.personNodes[0])
+      .map((u) => this.toUserDto(u, u.personNodes[0]!))
   }
 
   async updateStatus(userId: string, status: MemberStatus): Promise<User> {
     const existing = await this.prisma.user.findUnique({
       where:   { id: userId },
-      include: { personNode: true },
+      include: { personNodes: { take: 1 } },
     })
-    if (!existing || !existing.personNode) throw new NotFoundException('User not found')
+    if (!existing || !existing.personNodes[0]) throw new NotFoundException('User not found')
 
     // Reject (DEACTIVATED) of a pending member → delete entirely so the NIK is freed
     if (status === 'DEACTIVATED' && existing.status === 'PENDING_APPROVAL') {
-      const dto = this.toUserDto(existing, existing.personNode)
+      const dto = this.toUserDto(existing, existing.personNodes[0])
       await this.prisma.$transaction(async (tx) => {
-        await tx.personNode.delete({ where: { id: existing.personNode!.id } })
+        await tx.personNode.delete({ where: { id: existing.personNodes[0]!.id } })
         await tx.user.delete({ where: { id: userId } })
       })
       return dto
@@ -91,14 +95,14 @@ export class UsersService {
       data:  {
         status,
         ...(status === 'ACTIVE' && {
-          personNode: { update: { pendingApproval: false } },
+          personNodes: { updateMany: { where: {}, data: { pendingApproval: false } } },
         }),
       },
-      include: { personNode: true },
+      include: { personNodes: { take: 1 } },
     })
 
-    if (status === 'ACTIVE' && user.personNode) {
-      const node          = user.personNode
+    if (status === 'ACTIVE' && user.personNodes[0]) {
+      const node          = user.personNodes[0]
       const familyGroupId = node.familyGroupId
 
       // Create relationship edge from referrer info
@@ -120,20 +124,20 @@ export class UsersService {
       }
     }
 
-    return this.toUserDto(user, user.personNode!)
+    return this.toUserDto(user, user.personNodes[0]!)
   }
 
   async getPendingCount(requestingUserId: string): Promise<{ pendingCount: number; inviteExpired: boolean }> {
     const user = await this.prisma.user.findUnique({
       where:   { id: requestingUserId },
-      include: { personNode: { select: { familyGroupId: true } } },
+      include: { personNodes: { where: { familyGroupId: { not: null } }, select: { familyGroupId: true }, take: 1 } },
     })
     if (user?.role !== 'FAMILY_HEAD') return { pendingCount: 0, inviteExpired: false }
-    const familyGroupId = user.personNode?.familyGroupId
+    const familyGroupId = user.personNodes[0]?.familyGroupId
     if (!familyGroupId) return { pendingCount: 0, inviteExpired: false }
 
     const [pendingUsers, pendingNodes, invite] = await Promise.all([
-      this.prisma.user.count({ where: { status: 'PENDING_APPROVAL', personNode: { familyGroupId } } }),
+      this.prisma.user.count({ where: { status: 'PENDING_APPROVAL', personNodes: { some: { familyGroupId } } } }),
       this.prisma.personNode.count({
         where: { familyGroupId, pendingApproval: true, user: { status: { not: 'PENDING_APPROVAL' } } },
       }),
@@ -147,10 +151,10 @@ export class UsersService {
   async findPendingNodesByGroup(requestingUserId: string): Promise<PersonNode[]> {
     const user = await this.prisma.user.findUnique({
       where: { id: requestingUserId },
-      include: { personNode: { select: { familyGroupId: true } } },
+      include: { personNodes: { where: { familyGroupId: { not: null } }, select: { familyGroupId: true }, take: 1 } },
     })
     if (!user || user.role !== 'FAMILY_HEAD') return []
-    const familyGroupId = user.personNode?.familyGroupId
+    const familyGroupId = user.personNodes[0]?.familyGroupId
     if (!familyGroupId) return []
 
     // Exclude nodes whose linked user is already PENDING_APPROVAL (already shown in member list)
@@ -185,6 +189,28 @@ export class UsersService {
     }))
   }
 
+  async updateNik(targetUserId: string, newNik: string, requestingUserId: string): Promise<User> {
+    const requester = await this.prisma.user.findUnique({
+      where: { id: requestingUserId },
+    })
+    if (requester?.role !== 'FAMILY_HEAD') throw new ForbiddenException('Only Family Head can change NIK')
+    if (targetUserId === requestingUserId) throw new ForbiddenException('Use the profile page to update your own NIK through the standard process')
+
+    // Validate NIK format (16 digits)
+    if (!/^\d{16}$/.test(newNik)) throw new BadRequestException('NIK must be exactly 16 digits')
+
+    // Check uniqueness
+    const existingNik = await this.prisma.user.findUnique({ where: { nik: newNik } })
+    if (existingNik && existingNik.id !== targetUserId) throw new ConflictException('This NIK is already registered to another user')
+
+    const updated = await this.prisma.user.update({
+      where: { id: targetUserId },
+      data: { nik: newNik },
+      include: { personNodes: { take: 1 } },
+    })
+    return this.toUserDto(updated, updated.personNodes[0]!)
+  }
+
   /** Translate referrerRelationship → a RelationshipEdge on approval. */
   private async createReferrerEdge(
     newNodeId:    string,
@@ -193,11 +219,12 @@ export class UsersService {
   ): Promise<void> {
     const referrer = await this.prisma.user.findUnique({
       where:   { nik: referrerNik },
-      include: { personNode: { include: { relationshipsAsSource: true, relationshipsAsTarget: true } } },
+      include: { personNodes: { include: { relationshipsAsSource: true, relationshipsAsTarget: true }, take: 1 } },
     })
-    if (!referrer?.personNode) return
+    const referrerNode = referrer?.personNodes[0]
+    if (!referrerNode) return
 
-    const referrerNodeId = referrer.personNode.id
+    const referrerNodeId = referrerNode.id
     let sourceId: string, targetId: string, type: 'PARENT_CHILD' | 'SPOUSE' | 'SIBLING'
 
     switch (relationship) {
@@ -229,8 +256,8 @@ export class UsersService {
     // For REFERRER_IS_FATHER also link the referrer's spouse as second parent
     if (relationship === 'REFERRER_IS_FATHER') {
       const spouseEdge =
-        referrer.personNode.relationshipsAsSource.find((e) => e.relationshipType === 'SPOUSE') ??
-        referrer.personNode.relationshipsAsTarget.find((e) => e.relationshipType === 'SPOUSE')
+        referrerNode.relationshipsAsSource.find((e) => e.relationshipType === 'SPOUSE') ??
+        referrerNode.relationshipsAsTarget.find((e) => e.relationshipType === 'SPOUSE')
       if (spouseEdge) {
         const spouseNodeId = spouseEdge.sourceId === referrerNodeId ? spouseEdge.targetId : spouseEdge.sourceId
         await this.prisma.relationshipEdge.upsert({

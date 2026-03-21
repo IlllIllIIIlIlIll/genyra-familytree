@@ -39,6 +39,12 @@ enum InviteStatus {
   EXPIRED
 }
 
+enum LeaveRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // ─────────────────────────────────────────────
 // Core Tables
 // ─────────────────────────────────────────────
@@ -53,7 +59,8 @@ model User {
   referrerNik          String?
   referrerRelationship String?
 
-  personNode   PersonNode?
+  personNodes  PersonNode[]
+  leaveRequests LeaveRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -69,6 +76,7 @@ model FamilyGroup {
   members       PersonNode[]
   invites       Invite[]
   notifications Notification[]
+  leaveRequests LeaveRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -100,11 +108,12 @@ model PersonNode {
   isDeceased    Boolean   @default(false)
   isPlaceholder   Boolean   @default(false)
   pendingApproval Boolean   @default(false)
+  role          UserRole  @default(FAMILY_MEMBER)
 
   canvasX Float @default(0)
   canvasY Float @default(0)
 
-  userId String? @unique
+  userId String?
   user   User?   @relation(fields: [userId], references: [id])
 
   familyGroupId String?
@@ -118,6 +127,7 @@ model PersonNode {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([userId, familyGroupId])
   @@index([familyGroupId])
 }
 
@@ -166,4 +176,18 @@ model Invite {
 
   createdAt DateTime  @default(now())
   usedAt    DateTime?
+}
+
+model LeaveRequest {
+  id            String             @id @default(cuid())
+  userId        String
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  familyGroupId String
+  familyGroup   FamilyGroup        @relation(fields: [familyGroupId], references: [id])
+  status        LeaveRequestStatus @default(PENDING)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@unique([userId, familyGroupId])
+  @@index([familyGroupId])
 }

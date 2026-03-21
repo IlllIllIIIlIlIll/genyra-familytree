@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import type { FamilySummary } from '@genyra/shared-types'
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
@@ -36,9 +37,11 @@ interface AuthState {
   userId: string | null
   familyGroupId: string | null
   role: string | null
+  families: FamilySummary[]
   setTokens: (tokens: { accessToken: string; refreshToken: string }) => void
   setUser: (user: { userId: string; familyGroupId: string | null; role: string }) => void
   setFamilyGroupId: (id: string) => void
+  setFamilies: (families: FamilySummary[]) => void
   clear: () => void
 }
 
@@ -50,11 +53,13 @@ export const useAuthStore = create<AuthState>()(
       userId: null,
       familyGroupId: null,
       role: null,
+      families: [],
       setTokens: (tokens) =>
         set({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }),
       setUser: (user) =>
         set({ userId: user.userId, familyGroupId: user.familyGroupId, role: user.role }),
       setFamilyGroupId: (id) => set({ familyGroupId: id }),
+      setFamilies: (families) => set({ families }),
       clear: () =>
         set({
           accessToken: null,
@@ -62,6 +67,7 @@ export const useAuthStore = create<AuthState>()(
           userId: null,
           familyGroupId: null,
           role: null,
+          families: [],
         }),
     }),
     { name: 'genyra-auth' },

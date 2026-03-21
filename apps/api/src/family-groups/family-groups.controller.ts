@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, UseGuards } from '@nestjs/common'
+import { Controller, Get, Post, Patch, Body, Param, UseGuards, HttpCode, HttpStatus } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { FamilyGroupsService } from './family-groups.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
@@ -72,5 +72,35 @@ export class FamilyGroupsController {
     @CurrentUser() user: JwtPayload,
   ): Promise<MapData> {
     return this.familyGroupsService.getMapData(id, user.sub)
+  }
+
+  @Post(':id/leave')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Request to leave a family group' })
+  async requestLeave(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<{ message: string }> {
+    return this.familyGroupsService.requestLeave(user.sub, id)
+  }
+
+  @Get(':id/leave-requests')
+  @ApiOperation({ summary: 'Get pending leave requests (Family Head only)' })
+  async getLeaveRequests(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<unknown[]> {
+    return this.familyGroupsService.getLeaveRequests(user.sub, id)
+  }
+
+  @Patch(':id/leave-requests/:requestId')
+  @ApiOperation({ summary: 'Approve or reject a leave request (Family Head only)' })
+  async processLeaveRequest(
+    @Param('id') id: string,
+    @Param('requestId') requestId: string,
+    @Body() body: { approve: boolean },
+    @CurrentUser() user: JwtPayload,
+  ): Promise<{ message: string }> {
+    return this.familyGroupsService.processLeaveRequest(requestId, body.approve, user.sub, id)
   }
 }

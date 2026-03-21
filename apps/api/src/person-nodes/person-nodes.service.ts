@@ -29,12 +29,13 @@ export class PersonNodesService {
   async createForUser(dto: CreatePersonNodeDto, userId: string): Promise<PersonNode> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { personNode: true },
+      include: { personNodes: { where: { familyGroupId: { not: null } }, take: 1 } },
     })
-    if (!user?.personNode?.familyGroupId) {
+    const familyGroupId = user?.personNodes[0]?.familyGroupId
+    if (!familyGroupId) {
       throw new ForbiddenException('User does not belong to a family group')
     }
-    return this.create(dto, user.personNode.familyGroupId)
+    return this.create(dto, familyGroupId)
   }
 
   async create(dto: CreatePersonNodeDto, familyGroupId: string): Promise<PersonNode> {
@@ -135,10 +136,10 @@ export class PersonNodesService {
   async findUnlinked(requestingUserId: string): Promise<PersonNode[]> {
     const user = await this.prisma.user.findUnique({
       where:   { id: requestingUserId },
-      include: { personNode: { select: { familyGroupId: true } } },
+      include: { personNodes: { where: { familyGroupId: { not: null } }, select: { familyGroupId: true }, take: 1 } },
     })
     if (user?.role !== 'FAMILY_HEAD') return []
-    const familyGroupId = user.personNode?.familyGroupId
+    const familyGroupId = user.personNodes[0]?.familyGroupId
     if (!familyGroupId) return []
 
     const nodes = await this.prisma.personNode.findMany({
@@ -156,9 +157,10 @@ export class PersonNodesService {
   async addChild(dto: AddChildDto, requestingUserId: string): Promise<PersonNode> {
     const user = await this.prisma.user.findUnique({
       where:   { id: requestingUserId },
-      include: { personNode: true },
+      include: { personNodes: { where: { familyGroupId: { not: null } }, take: 1 } },
     })
-    if (!user?.personNode?.familyGroupId) {
+    const activeNode = user?.personNodes[0]
+    if (!activeNode?.familyGroupId) {
       throw new ForbiddenException('You must be in a family group to add a child')
     }
 
@@ -170,8 +172,8 @@ export class PersonNodesService {
     const spouseEdge = await this.prisma.relationshipEdge.findFirst({
       where: {
         OR: [
-          { sourceId: user.personNode.id, relationshipType: 'SPOUSE' },
-          { targetId: user.personNode.id, relationshipType: 'SPOUSE' },
+          { sourceId: activeNode.id, relationshipType: 'SPOUSE' },
+          { targetId: activeNode.id, relationshipType: 'SPOUSE' },
         ],
       },
     })
@@ -179,13 +181,13 @@ export class PersonNodesService {
       throw new BadRequestException('You must be married (have a spouse) to add a child')
     }
 
-    const spouseId      = spouseEdge.sourceId === user.personNode.id
+    const spouseId      = spouseEdge.sourceId === activeNode.id
       ? spouseEdge.targetId
       : spouseEdge.sourceId
-    const isFamilyHead  = user.role === 'FAMILY_HEAD'
-    const familyGroupId = user.personNode.familyGroupId
+    const isFamilyHead  = user!.role === 'FAMILY_HEAD'
+    const familyGroupId = activeNode.familyGroupId
     // Child inherits parent's passwordHash so they can log in with the family password
-    const passwordHash  = user.passwordHash
+    const passwordHash  = user!.passwordHash
 
     const child = await this.prisma.$transaction(async (tx) => {
       const childUser = await tx.user.create({
@@ -213,8 +215,8 @@ export class PersonNodesService {
 
       await tx.relationshipEdge.createMany({
         data: [
-          { sourceId: user.personNode!.id, targetId: childNode.id, relationshipType: 'PARENT_CHILD' },
-          { sourceId: spouseId,            targetId: childNode.id, relationshipType: 'PARENT_CHILD' },
+          { sourceId: activeNode.id, targetId: childNode.id, relationshipType: 'PARENT_CHILD' },
+          { sourceId: spouseId,      targetId: childNode.id, relationshipType: 'PARENT_CHILD' },
         ],
         skipDuplicates: true,
       })

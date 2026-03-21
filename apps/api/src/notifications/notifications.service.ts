@@ -11,9 +11,9 @@ export class NotificationsService {
   async getForFamily(requestingUserId: string): Promise<Notification[]> {
     const user = await this.prisma.user.findUnique({
       where:   { id: requestingUserId },
-      include: { personNode: { select: { familyGroupId: true } } },
+      include: { personNodes: { where: { familyGroupId: { not: null } }, select: { familyGroupId: true }, take: 1 } },
     })
-    const familyGroupId = user?.personNode?.familyGroupId
+    const familyGroupId = user?.personNodes[0]?.familyGroupId
     if (!familyGroupId) throw new ForbiddenException('Not a member of any family group')
 
     const rows = await this.prisma.notification.findMany({

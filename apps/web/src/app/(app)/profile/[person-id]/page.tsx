@@ -28,6 +28,7 @@ export default function ProfilePage() {
   const role          = useAuthStore((s) => s.role)
   const toast         = useToastStore((s) => s.toast)
   const queryClient   = useQueryClient()
+  const [confirmLeave, setConfirmLeave] = useState(false)
 
   // ── Data ────────────────────────────────────────────────────────────────────
 
@@ -88,6 +89,19 @@ export default function ProfilePage() {
 
   const handleCropCancel = useCallback(() => setCropFile(null), [])
 
+  const leaveFamilyMutation = useMutation({
+    mutationFn: () => apiClient.requestLeaveFamily(familyGroupId!),
+    onSuccess: (res) => {
+      toast(res.message, 'success')
+      setConfirmLeave(false)
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to submit leave request'
+      toast(msg, 'error')
+      setConfirmLeave(false)
+    },
+  })
+
   // ── Loading / not found ──────────────────────────────────────────────────
 
   if (isLoading) {
@@ -108,6 +122,8 @@ export default function ProfilePage() {
   }
 
   const canEditPhotos = node.userId === authUserId || role === 'FAMILY_HEAD'
+  const isOwnProfile  = node.userId === authUserId
+  const isMember      = role !== 'FAMILY_HEAD'
 
   const birthYear = node.birthDate ? new Date(node.birthDate).getFullYear() : null
   const deathYear = node.deathDate ? new Date(node.deathDate).getFullYear() : null
@@ -326,6 +342,41 @@ export default function ProfilePage() {
           >
             Edit Profile
           </Button>
+
+          {/* Leave family — own profile, non-head only */}
+          {isOwnProfile && isMember && (
+            <div className="bg-white rounded-2xl border border-red-50 shadow-sm p-4 mt-2">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Family</p>
+              {confirmLeave ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-600">Your request will be sent to the family head for approval. You will remain in the family until they approve.</p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      className="flex-1 text-xs"
+                      onClick={() => setConfirmLeave(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <button
+                      onClick={() => leaveFamilyMutation.mutate()}
+                      disabled={leaveFamilyMutation.isPending}
+                      className="flex-1 py-2 text-xs font-medium bg-red-500 text-white rounded-xl hover:bg-red-600 disabled:opacity-50 transition-colors"
+                    >
+                      {leaveFamilyMutation.isPending ? 'Sending…' : 'Confirm request'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setConfirmLeave(true)}
+                  className="w-full py-2 text-xs font-medium text-red-500 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-colors"
+                >
+                  Leave this family
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </>

@@ -8,8 +8,10 @@ async function main() {
 
   await prisma.relationshipEdge.deleteMany()
   await prisma.personPhoto.deleteMany()
+  await prisma.leaveRequest.deleteMany()
   await prisma.personNode.deleteMany()
   await prisma.invite.deleteMany()
+  await prisma.notification.deleteMany()
   await prisma.user.deleteMany()
   await prisma.familyGroup.deleteMany()
 
@@ -39,7 +41,7 @@ async function main() {
         passwordHash,
         role:         opts.role ?? 'FAMILY_MEMBER',
         status:       'ACTIVE',
-        personNode: {
+        personNodes: {
           create: {
             displayName:   opts.displayName,
             gender:        opts.gender,
@@ -49,12 +51,13 @@ async function main() {
             isDeceased:    opts.isDeceased ?? false,
             deathDate:     opts.deathDate ?? null,
             familyGroupId: g,
+            role:          opts.role ?? 'FAMILY_MEMBER',
           },
         },
       },
-      include: { personNode: true },
+      include: { personNodes: true },
     })
-    return u.personNode!
+    return u.personNodes[0]!
   }
 
   const rel = (

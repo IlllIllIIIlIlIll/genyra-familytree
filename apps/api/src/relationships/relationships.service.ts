@@ -95,7 +95,14 @@ export class RelationshipsService {
     source: { id: string; gender: string | null; birthDate: Date | null },
     target: { id: string; gender: string | null; birthDate: Date | null },
   ): Promise<void> {
-    // Rule 1: Age gap ≤ 25 years
+    // Rule 1: Opposite sex only
+    if (source.gender !== null && target.gender !== null) {
+      if (source.gender === target.gender) {
+        throw new UnprocessableEntityException('SAME_SEX: spouse nodes must be of opposite genders')
+      }
+    }
+
+    // Rule 2: Age gap ≤ 25 years
     if (source.birthDate !== null && target.birthDate !== null) {
       const gap = Math.abs(
         source.birthDate.getFullYear() - target.birthDate.getFullYear(),
@@ -107,7 +114,7 @@ export class RelationshipsService {
       }
     }
 
-    // Rule 3: No shared blood ancestor within 3 generations
+    // Rule 3: No shared blood ancestor within 3 generations (consanguinity)
     await this.assertNoCommonAncestor(source.id, target.id, 3)
   }
 

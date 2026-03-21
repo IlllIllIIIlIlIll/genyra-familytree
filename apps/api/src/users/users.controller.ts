@@ -65,6 +65,18 @@ export class UsersController {
     return this.usersService.updateStatus(id, body.status)
   }
 
+  @Patch(':id/nik')
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_HEAD')
+  @ApiOperation({ summary: 'Update a member NIK (Family Head only)' })
+  async updateNik(
+    @Param('id') id: string,
+    @Body() body: { nik: string },
+    @CurrentUser() user: JwtPayload,
+  ): Promise<User> {
+    return this.usersService.updateNik(id, body.nik, user.sub)
+  }
+
   @Delete(':id')
   @UseGuards(RolesGuard)
   @Roles('FAMILY_HEAD')

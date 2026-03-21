@@ -39,14 +39,17 @@ export class AuthService {
       if (dto.referrerNik && dto.referrerRelationship) {
         const referrerUser = await this.prisma.user.findUnique({
           where:   { nik: dto.referrerNik },
-          include: { personNode: true },
+          include: { personNodes: true },
         })
-        if (!referrerUser?.personNode || referrerUser.personNode.familyGroupId !== invite.familyGroupId) {
+        const referrerNode = referrerUser?.personNodes.find(
+          (n) => n.familyGroupId === invite.familyGroupId,
+        )
+        if (!referrerNode) {
           throw new BadRequestException('Referrer not found in this family')
         }
 
-        const referrerNodeId   = referrerUser.personNode.id
-        const referrerGender   = referrerUser.personNode.gender
+        const referrerNodeId   = referrerNode.id
+        const referrerGender   = referrerNode.gender
 
         if (dto.referrerRelationship === 'REFERRER_IS_FATHER') {
           // Referrer claims to be the registrant's father — must be male and married
@@ -118,7 +121,7 @@ export class AuthService {
             status:              'PENDING_APPROVAL',
             referrerNik:         dto.referrerNik          ?? null,
             referrerRelationship: dto.referrerRelationship ?? null,
-            personNode: {
+            personNodes: {
               create: {
                 displayName:     dto.displayName,
                 surname:         dto.surname,
@@ -150,7 +153,7 @@ export class AuthService {
           passwordHash,
           role:   'FAMILY_HEAD',
           status: 'ACTIVE',
-          personNode: {
+          personNodes: {
             create: {
               displayName:   dto.displayName,
               surname:       dto.surname,
@@ -158,6 +161,7 @@ export class AuthService {
               birthDate,
               birthPlace:    dto.birthPlace,
               familyGroupId: familyGroup.id,
+              role:          'FAMILY_HEAD',
             },
           },
         },
@@ -176,24 +180,27 @@ export class AuthService {
     const passwordValid = await argon2.verify(user.passwordHash, dto.password)
     if (!passwordValid) throw new UnauthorizedException('Invalid credentials')
 
-    if (user.status === 'DEACTIVATED') {
-      throw new ForbiddenException('Account has been deactivated')
-    }
-    if (user.status === 'PENDING_APPROVAL') {
-      throw new ForbiddenException('Account is pending approval from the family head')
-    }
+    if (user.status === 'DEACTIVATED') throw new ForbiddenException('Account has been deactivated')
+    if (user.status === 'PENDING_APPROVAL') throw new ForbiddenException('Account is pending approval from the family head')
 
-    return this.generateTokens(user.id, user.role)
+    // Pick first active family
+    const personNode = await this.prisma.personNode.findFirst({
+      where: { userId: user.id, pendingApproval: false, familyGroupId: { not: null } },
+      orderBy: { createdAt: 'asc' },
+    })
+    if (!personNode?.familyGroupId) throw new ForbiddenException('No active family membership found')
+
+    return this.generateTokens(user.id, personNode.familyGroupId)
   }
 
-  async refreshTokens(userId: string, refreshToken: string): Promise<AuthTokens> {
+  async refreshTokens(userId: string, refreshToken: string, familyGroupId: string): Promise<AuthTokens> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } })
     if (!user?.refreshToken) throw new UnauthorizedException()
 
     const tokenValid = await argon2.verify(user.refreshToken, refreshToken)
     if (!tokenValid) throw new UnauthorizedException('Invalid refresh token')
 
-    return this.generateTokens(user.id, user.role)
+    return this.generateTokens(user.id, familyGroupId)
   }
 
   async logout(userId: string): Promise<void> {
@@ -203,8 +210,37 @@ export class AuthService {
     })
   }
 
-  private async generateTokens(userId: string, role: string): Promise<AuthTokens> {
-    const payload = { sub: userId, role }
+  async switchFamily(userId: string, familyGroupId: string): Promise<AuthTokens> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } })
+    if (!user) throw new UnauthorizedException('Invalid credentials')
+    if (user.status === 'DEACTIVATED') throw new ForbiddenException('Account has been deactivated')
+
+    const personNode = await this.prisma.personNode.findFirst({
+      where: { userId, familyGroupId },
+    })
+    if (!personNode) throw new ForbiddenException('Not a member of this family')
+    if (personNode.pendingApproval) throw new ForbiddenException('Membership pending approval in this family')
+
+    return this.generateTokens(userId, familyGroupId)
+  }
+
+  async getMyFamilies(userId: string): Promise<Array<{ id: string; name: string; role: string }>> {
+    const personNodes = await this.prisma.personNode.findMany({
+      where: { userId, pendingApproval: false, familyGroupId: { not: null } },
+      include: { familyGroup: { select: { id: true, name: true } } },
+    })
+    return personNodes
+      .filter((n) => n.familyGroup)
+      .map((n) => ({ id: n.familyGroupId!, name: n.familyGroup!.name, role: n.role }))
+  }
+
+  private async generateTokens(userId: string, familyGroupId: string): Promise<AuthTokens> {
+    // Get role from PersonNode for this family
+    const personNode = await this.prisma.personNode.findFirst({
+      where: { userId, familyGroupId },
+    })
+    const role = personNode?.role ?? 'FAMILY_MEMBER'
+    const payload = { sub: userId, role, fid: familyGroupId }
 
     const accessSecret  = process.env['JWT_ACCESS_SECRET']
     const refreshSecret = process.env['JWT_REFRESH_SECRET']

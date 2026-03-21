@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common'
+import { Controller, Post, Get, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { AuthService } from './auth.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
@@ -36,7 +36,7 @@ export class AuthController {
     @Body() body: unknown,
   ): Promise<AuthTokens> {
     const { refreshToken } = body as { refreshToken: string }
-    return this.authService.refreshTokens(user.sub, refreshToken)
+    return this.authService.refreshTokens(user.sub, refreshToken, user.fid)
   }
 
   @Post('logout')
@@ -47,5 +47,27 @@ export class AuthController {
   async logout(@CurrentUser() user: JwtPayload): Promise<{ message: string }> {
     await this.authService.logout(user.sub)
     return { message: 'Logged out successfully' }
+  }
+
+  @Post('switch-family')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Switch active family and receive new tokens' })
+  async switchFamily(
+    @CurrentUser() user: JwtPayload,
+    @Body() body: { familyGroupId: string },
+  ): Promise<AuthTokens> {
+    return this.authService.switchFamily(user.sub, body.familyGroupId)
+  }
+
+  @Get('my-families')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List all families the current user belongs to' })
+  async myFamilies(
+    @CurrentUser() user: JwtPayload,
+  ): Promise<Array<{ id: string; name: string; role: string }>> {
+    return this.authService.getMyFamilies(user.sub)
   }
 }

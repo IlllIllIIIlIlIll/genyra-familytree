@@ -30,10 +30,10 @@ export class InvitesService {
   async getOrCreateForFamily(requestingUserId: string): Promise<Invite> {
     const user = await this.prisma.user.findUnique({
       where:   { id: requestingUserId },
-      include: { personNode: true },
+      include: { personNodes: { where: { familyGroupId: { not: null } }, select: { familyGroupId: true }, take: 1 } },
     })
     if (user?.role !== 'FAMILY_HEAD') throw new ForbiddenException('Only Family Head can view invite codes')
-    const familyGroupId = user.personNode?.familyGroupId
+    const familyGroupId = user.personNodes[0]?.familyGroupId
     if (!familyGroupId) throw new ForbiddenException('User has no family group')
 
     // Return the most recent invite regardless of status; only auto-create on first ever access
@@ -54,10 +54,10 @@ export class InvitesService {
   async refreshForFamily(requestingUserId: string): Promise<Invite> {
     const user = await this.prisma.user.findUnique({
       where:   { id: requestingUserId },
-      include: { personNode: true },
+      include: { personNodes: { where: { familyGroupId: { not: null } }, select: { familyGroupId: true }, take: 1 } },
     })
     if (user?.role !== 'FAMILY_HEAD') throw new ForbiddenException('Only Family Head can refresh invites')
-    const familyGroupId = user.personNode?.familyGroupId
+    const familyGroupId = user.personNodes[0]?.familyGroupId
     if (!familyGroupId) throw new ForbiddenException('User has no family group')
 
     const code      = await uniqueCode(this.prisma)

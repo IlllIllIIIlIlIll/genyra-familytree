@@ -22,6 +22,8 @@ import type {
   AddChildDto,
   Notification,
   AdminBadge,
+  LeaveRequest,
+  FamilySummary,
 } from '@genyra/shared-types'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'
@@ -268,6 +270,40 @@ export const apiClient = {
   // Admin badge: pending count + invite expired status (Family Head only)
   getAdminBadge: async (): Promise<AdminBadge> => {
     const { data } = await http.get<AdminBadge>('/users/pending-count')
+    return data
+  },
+
+  // Multi-family
+  getMyFamilies: async (): Promise<FamilySummary[]> => {
+    const { data } = await http.get<FamilySummary[]>('/auth/my-families')
+    return data
+  },
+
+  switchFamily: async (familyGroupId: string): Promise<AuthTokens> => {
+    const { data } = await http.post<AuthTokens>('/auth/switch-family', { familyGroupId })
+    return data
+  },
+
+  // Leave family (member requesting to leave)
+  requestLeaveFamily: async (familyGroupId: string): Promise<{ message: string }> => {
+    const { data } = await http.post<{ message: string }>(`/family-groups/${familyGroupId}/leave`)
+    return data
+  },
+
+  // Leave requests (admin only)
+  getLeaveRequests: async (familyGroupId: string): Promise<LeaveRequest[]> => {
+    const { data } = await http.get<LeaveRequest[]>(`/family-groups/${familyGroupId}/leave-requests`)
+    return data
+  },
+
+  processLeaveRequest: async (familyGroupId: string, requestId: string, approve: boolean): Promise<{ message: string }> => {
+    const { data } = await http.patch<{ message: string }>(`/family-groups/${familyGroupId}/leave-requests/${requestId}`, { approve })
+    return data
+  },
+
+  // Admin NIK update
+  adminUpdateNik: async (userId: string, nik: string): Promise<User> => {
+    const { data } = await http.patch<User>(`/users/${userId}/nik`, { nik })
     return data
   },
 }

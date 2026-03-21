@@ -4,6 +4,7 @@ import type { FastifyRequest } from 'fastify'
 export interface JwtPayload {
   sub: string
   role: string
+  fid: string
 }
 
 export const CurrentUser = createParamDecorator(

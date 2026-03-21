@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiClient } from '@/lib/api-client'
 import { useAuthStore, useToastStore } from '@/store/map-store'
 import { cn } from '@/lib/utils'
-import type { User, PersonNode } from '@genyra/shared-types'
+import type { User, PersonNode, LeaveRequest } from '@genyra/shared-types'
 
 const RELATIONSHIP_LABELS: Record<string, string> = {
   REFERRER_IS_FATHER:   'referred by their father',
@@ -21,6 +21,8 @@ export default function AdminPage() {
   const queryClient   = useQueryClient()
   const [copied, setCopied]             = useState(false)
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [editNikId, setEditNikId]       = useState<string | null>(null)
+  const [nikDraft, setNikDraft]         = useState('')
 
   // ── Invite ─────────────────────────────────────────────────────────────────
   const { data: invite, isLoading: loadingInvite } = useQuery({
@@ -145,7 +147,41 @@ export default function AdminPage() {
     setConfirmDeleteId((prev) => (prev === id ? null : id))
   }, [])
 
-  const totalPending = pendingUsers.length + pendingNodes.length
+  // ── Leave requests ─────────────────────────────────────────────────────────
+  const { data: leaveRequests = [] } = useQuery({
+    queryKey: ['leave-requests', familyGroupId],
+    queryFn:  () => apiClient.getLeaveRequests(familyGroupId!),
+    enabled:  !!familyGroupId,
+  })
+
+  const processLeaveMutation = useMutation({
+    mutationFn: ({ requestId, approve }: { requestId: string; approve: boolean }) =>
+      apiClient.processLeaveRequest(familyGroupId!, requestId, approve),
+    onSuccess: (_, { approve }) => {
+      void queryClient.invalidateQueries({ queryKey: ['leave-requests', familyGroupId] })
+      void queryClient.invalidateQueries({ queryKey: ['map-data', familyGroupId] })
+      void queryClient.invalidateQueries({ queryKey: ['family-members'] })
+      toast(approve ? 'Member removed from family' : 'Leave request rejected', approve ? 'neutral' : 'neutral')
+    },
+    onError: () => toast('Failed to process request', 'error'),
+  })
+
+  // ── NIK edit ───────────────────────────────────────────────────────────────
+  const updateNikMutation = useMutation({
+    mutationFn: ({ userId, nik }: { userId: string; nik: string }) =>
+      apiClient.adminUpdateNik(userId, nik),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['family-members'] })
+      setEditNikId(null)
+      toast('NIK updated', 'success')
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to update NIK'
+      toast(msg, 'error')
+    },
+  })
+
+  const totalPending = pendingUsers.length + pendingNodes.length + leaveRequests.length
   const isLoading    = loadingUsers || loadingNodes
 
   return (
@@ -256,6 +292,35 @@ export default function AdminPage() {
                 </li>
               ))}
 
+              {/* Leave requests */}
+              {leaveRequests.map((req: LeaveRequest) => (
+                <li key={req.id} className="bg-white rounded-xl border border-orange-100 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-slate-800 text-sm">{req.displayName}</p>
+                      <p className="text-xs text-slate-400">NIK: {req.nik}</p>
+                      <p className="text-xs text-orange-500 mt-0.5">Requesting to leave the family</p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => processLeaveMutation.mutate({ requestId: req.id, approve: true })}
+                        disabled={processLeaveMutation.isPending}
+                        className="px-3 py-1.5 text-xs font-medium bg-stone-100 text-slate-600 rounded-lg hover:bg-stone-200 disabled:opacity-50"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => processLeaveMutation.mutate({ requestId: req.id, approve: false })}
+                        disabled={processLeaveMutation.isPending}
+                        className="px-3 py-1.5 text-xs font-medium bg-brand-50 text-brand-600 rounded-lg hover:bg-brand-100 disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                </li>
+              ))}
+
               {/* Pending child nodes */}
               {pendingNodes.map((node: PersonNode) => (
                 <li key={node.id} className="bg-white rounded-xl border border-stone-100 p-4">
@@ -342,12 +407,41 @@ export default function AdminPage() {
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold text-slate-800 text-sm">{member.displayName}</p>
-                      <p className="text-xs text-slate-400">
-                        NIK: {member.nik}
-                        {member.role === 'FAMILY_HEAD' && (
-                          <span className="ml-2 text-brand-500 font-medium">Family Head</span>
-                        )}
-                      </p>
+                      {editNikId === member.id ? (
+                        <div className="flex items-center gap-1 mt-1">
+                          <input
+                            autoFocus
+                            value={nikDraft}
+                            onChange={(e) => setNikDraft(e.target.value.replace(/\D/g, '').slice(0, 16))}
+                            placeholder="16-digit NIK"
+                            inputMode="numeric"
+                            maxLength={16}
+                            className="text-xs bg-stone-100 rounded-lg px-2 py-1 w-36 focus:outline-none focus:ring-1 focus:ring-brand-400"
+                          />
+                          <button
+                            onClick={() => updateNikMutation.mutate({ userId: member.id, nik: nikDraft })}
+                            disabled={nikDraft.length !== 16 || updateNikMutation.isPending}
+                            className="text-xs font-medium text-brand-600 hover:text-brand-700 disabled:opacity-40 px-1"
+                          >Save</button>
+                          <button onClick={() => setEditNikId(null)} className="text-xs text-slate-400 hover:text-slate-600 px-1">✕</button>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 flex items-center gap-1">
+                          NIK: {member.nik}
+                          {member.role === 'FAMILY_HEAD' && (
+                            <span className="ml-1 text-brand-500 font-medium">Family Head</span>
+                          )}
+                          <button
+                            onClick={() => { setEditNikId(member.id); setNikDraft(member.nik) }}
+                            className="ml-1 text-slate-300 hover:text-slate-500 transition-colors"
+                            title="Edit NIK"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                          </button>
+                        </p>
+                      )}
                     </div>
                     {confirmDeleteId === member.id ? (
                       <div className="flex gap-2 shrink-0">
