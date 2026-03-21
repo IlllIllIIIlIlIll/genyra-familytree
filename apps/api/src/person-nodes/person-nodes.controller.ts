@@ -51,9 +51,10 @@ export class PersonNodesController {
   async updatePosition(
     @Param('id') id: string,
     @Body() body: unknown,
+    @CurrentUser() user: JwtPayload,
   ): Promise<PersonNode> {
     const dto = UpdateCanvasPositionSchema.parse(body) satisfies UpdateCanvasPositionDto
-    return this.personNodesService.updateCanvasPosition(id, dto)
+    return this.personNodesService.updateCanvasPosition(id, dto, user.sub)
   }
 
   @Delete(':id')

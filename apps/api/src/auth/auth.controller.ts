@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { AuthService } from './auth.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator'
+import { z } from 'zod'
 import { RegisterSchema, LoginSchema } from '@genyra/shared-types'
 import type { RegisterDto, LoginDto, AuthTokens } from '@genyra/shared-types'
 
@@ -35,7 +36,7 @@ export class AuthController {
     @CurrentUser() user: JwtPayload,
     @Body() body: unknown,
   ): Promise<AuthTokens> {
-    const { refreshToken } = body as { refreshToken: string }
+    const { refreshToken } = z.object({ refreshToken: z.string().min(1) }).parse(body)
     return this.authService.refreshTokens(user.sub, refreshToken, user.fid)
   }
 

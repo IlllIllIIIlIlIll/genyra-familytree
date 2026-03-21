@@ -13,8 +13,10 @@ export class RelationshipsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateRelationshipDto, requestingUserId: string): Promise<RelationshipEdge> {
-    const user = await this.prisma.user.findUnique({ where: { id: requestingUserId } })
-    if (user?.role !== 'FAMILY_HEAD') {
+    const headNode = await this.prisma.personNode.findFirst({
+      where: { userId: requestingUserId, role: 'FAMILY_HEAD', familyGroupId: { not: null } },
+    })
+    if (!headNode) {
       throw new ForbiddenException('Only Family Head can create relationships')
     }
 
@@ -54,8 +56,10 @@ export class RelationshipsService {
   }
 
   async delete(id: string, requestingUserId: string): Promise<void> {
-    const user = await this.prisma.user.findUnique({ where: { id: requestingUserId } })
-    if (user?.role !== 'FAMILY_HEAD') {
+    const headNode = await this.prisma.personNode.findFirst({
+      where: { userId: requestingUserId, role: 'FAMILY_HEAD', familyGroupId: { not: null } },
+    })
+    if (!headNode) {
       throw new ForbiddenException('Only Family Head can delete relationships')
     }
     await this.prisma.relationshipEdge.delete({ where: { id } })

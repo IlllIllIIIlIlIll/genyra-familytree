@@ -31,7 +31,8 @@
       "Bash(tasklist)",
       "Bash(del:*)",
       "Bash(npx tsc:*)",
-      "Bash(1:*)"
+      "Bash(1:*)",
+      "Bash(\"C:/Users/Lenovo/Documents/GitHub/genyra-familytree/README.md\":*)"
     ]
   }
 }

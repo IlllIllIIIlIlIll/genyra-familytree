@@ -28,6 +28,7 @@ import { RelationshipEdgeComponent } from './relationship-edge'
 import { BracketEdgeComponent } from './bracket-edge'
 import { ProfileCard } from '@/components/profile/profile-card'
 import { computeFamilyLayout } from './family-layout'
+import { computeGenerations } from './generation-utils'
 import type { PersonNode, Notification } from '@genyra/shared-types'
 
 const nodeTypes = {
@@ -163,7 +164,10 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   const [isFamilySwitcherOpen, setIsFamilySwitcherOpen] = useState(false)
   const [joinFamilyOpen, setJoinFamilyOpen]             = useState(false)
   const [joinInviteCode, setJoinInviteCode]             = useState('')
+  const [genOffset, setGenOffset]                       = useState(0)
   const toast = useToastStore((s) => s.toast)
+
+  const GEN_WINDOW = 4
 
   // Notification last-read timestamp stored per user in localStorage
   const notifKey = currentUserId ? `notif_last_read_${currentUserId}` : null
@@ -260,11 +264,59 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
       apiClient.updateCanvasPosition(id, { canvasX: x, canvasY: y }),
   })
 
-  useEffect(() => {
-    if (!mapData) return
-    const { positions, edges: edgeMetas } = computeFamilyLayout(mapData)
+  // ── Generation window ────────────────────────────────────────────────────
+  const genMap = useMemo(
+    () => (mapData ? computeGenerations(mapData.nodes, mapData.edges) : new Map<string, number>()),
+    [mapData],
+  )
+  const maxGen = useMemo(() => (genMap.size > 0 ? Math.max(...genMap.values()) : 0), [genMap])
+  const totalGenerations = maxGen + 1
 
-    const personNodes: Node<FlowNodeData>[] = mapData.nodes.map((n) => {
+  // anchorGen = newest generation in the current window
+  const anchorGen  = Math.max(0, maxGen - genOffset)
+  const windowMax  = anchorGen
+  const windowMin  = Math.max(0, anchorGen - GEN_WINDOW + 1)
+  const canGoOlder = windowMin > 0
+  const canGoNewer = genOffset > 0
+
+  const filteredMapData = useMemo(() => {
+    if (!mapData) return null
+    if (totalGenerations <= GEN_WINDOW) return mapData
+
+    const visibleIds = new Set(
+      mapData.nodes
+        .filter((n) => { const g = genMap.get(n.id) ?? 0; return g >= windowMin && g <= windowMax })
+        .map((n) => n.id),
+    )
+    return {
+      familyName: mapData.familyName,
+      nodes: mapData.nodes.filter((n) => visibleIds.has(n.id)),
+      edges: mapData.edges.filter((e) => visibleIds.has(e.sourceId) && visibleIds.has(e.targetId)),
+    }
+  // windowMin/windowMax derived from genOffset + genMap; list all real deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapData, genMap, genOffset, totalGenerations])
+
+  // Reset to newest window whenever the family changes
+  useEffect(() => { setGenOffset(0) }, [familyGroupId])
+
+  // Refit view when generation window slides
+  useEffect(() => { shouldFitViewRef.current = true }, [genOffset])
+
+  // Close profile panel if selected node scrolled out of view
+  useEffect(() => {
+    if (!selectedNodeId || !mapData || totalGenerations <= GEN_WINDOW) return
+    const nodeGen = genMap.get(selectedNodeId)
+    if (nodeGen !== undefined && (nodeGen < windowMin || nodeGen > windowMax)) {
+      closeProfilePanel()
+    }
+  }, [genOffset, genMap, mapData, selectedNodeId, totalGenerations, windowMin, windowMax, closeProfilePanel])
+
+  useEffect(() => {
+    if (!filteredMapData) return
+    const { positions, edges: edgeMetas } = computeFamilyLayout(filteredMapData)
+
+    const personNodes: Node<FlowNodeData>[] = filteredMapData.nodes.map((n) => {
       const pos = positions.get(n.id) ?? { x: n.canvasX, y: n.canvasY }
       return {
         id: n.id, type: 'personNode', position: pos,
@@ -309,8 +361,9 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
       })
     }
   // layoutVersion forces re-layout even when mapData hasn't changed (drag reset).
+  // genOffset triggers a new layout when the generation window slides.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapData, layoutVersion, setNodes, setRawEdges, currentUserId, fitView])
+  }, [filteredMapData, layoutVersion, setNodes, setRawEdges, currentUserId, fitView])
 
   const handleNodesChange = useCallback(
     (changes: NodeChange<Node<FlowNodeData>>[]) => {
@@ -729,6 +782,38 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
               className="!border-stone-200 !rounded-xl overflow-hidden"
               style={{ width: minimapSize.width, height: minimapSize.height }}
             />
+          )}
+
+          {/* ── Generation navigation pill ───────────────────────────────── */}
+          {!isCleanView && totalGenerations > GEN_WINDOW && (
+            <Panel position="bottom-center" style={{ bottom: isFamilyHead ? 72 : 16 }}>
+              <div className="flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-full shadow-md border border-stone-200 px-1 py-1">
+                <button
+                  onClick={() => { setGenOffset((o) => o + 1) }}
+                  disabled={!canGoOlder}
+                  aria-label="Show older generations"
+                  className="flex items-center justify-center w-8 h-8 rounded-full text-slate-500 hover:bg-stone-100 disabled:opacity-30 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                    <path fillRule="evenodd" d="M9.47 6.47a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 1 1-1.06 1.06L10 8.06l-3.72 3.72a.75.75 0 0 1-1.06-1.06l4.25-4.25Z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                <span className="text-xs font-medium text-slate-600 tabular-nums px-1 min-w-[72px] text-center">
+                  Gen {windowMin + 1}–{windowMax + 1}
+                  <span className="text-slate-400"> / {totalGenerations}</span>
+                </span>
+                <button
+                  onClick={() => { setGenOffset((o) => o - 1) }}
+                  disabled={!canGoNewer}
+                  aria-label="Show newer generations"
+                  className="flex items-center justify-center w-8 h-8 rounded-full text-slate-500 hover:bg-stone-100 disabled:opacity-30 transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                    <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </div>
+            </Panel>
           )}
         </ReactFlow>
 

@@ -115,7 +115,19 @@ export class PersonNodesService {
   async updateCanvasPosition(
     id: string,
     dto: UpdateCanvasPositionDto,
+    requestingUserId: string,
   ): Promise<PersonNode> {
+    const node = await this.prisma.personNode.findUnique({ where: { id } })
+    if (!node) throw new NotFoundException('Person node not found')
+
+    // Verify requester is a member of the same family
+    const isMember = node.familyGroupId
+      ? await this.prisma.personNode.findFirst({
+          where: { userId: requestingUserId, familyGroupId: node.familyGroupId },
+        })
+      : null
+    if (!isMember) throw new ForbiddenException('Not a member of this family')
+
     const updated = await this.prisma.personNode.update({
       where: { id },
       data: { canvasX: dto.canvasX, canvasY: dto.canvasY },
@@ -125,21 +137,20 @@ export class PersonNodesService {
   }
 
   async delete(id: string, requestingUserId: string): Promise<void> {
-    const user = await this.prisma.user.findUnique({ where: { id: requestingUserId } })
-    if (user?.role !== 'FAMILY_HEAD') {
-      throw new ForbiddenException('Only Family Head can delete person nodes')
-    }
+    const headNode = await this.prisma.personNode.findFirst({
+      where: { userId: requestingUserId, role: 'FAMILY_HEAD', familyGroupId: { not: null } },
+    })
+    if (!headNode) throw new ForbiddenException('Only Family Head can delete person nodes')
     await this.prisma.personNode.delete({ where: { id } })
   }
 
   /** Nodes with no linked User account (created by old addChild or similar) — Family Head only. */
   async findUnlinked(requestingUserId: string): Promise<PersonNode[]> {
-    const user = await this.prisma.user.findUnique({
-      where:   { id: requestingUserId },
-      include: { personNodes: { where: { familyGroupId: { not: null } }, select: { familyGroupId: true }, take: 1 } },
+    const headNode = await this.prisma.personNode.findFirst({
+      where: { userId: requestingUserId, role: 'FAMILY_HEAD', familyGroupId: { not: null } },
+      select: { familyGroupId: true },
     })
-    if (user?.role !== 'FAMILY_HEAD') return []
-    const familyGroupId = user.personNodes[0]?.familyGroupId
+    const familyGroupId = headNode?.familyGroupId
     if (!familyGroupId) return []
 
     const nodes = await this.prisma.personNode.findMany({
