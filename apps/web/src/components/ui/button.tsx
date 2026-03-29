@@ -4,19 +4,23 @@ import type { ButtonHTMLAttributes } from 'react'
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
   size?: 'sm' | 'md' | 'lg'
+  isLoading?: boolean
 }
 
 export function Button({
   variant = 'primary',
   size = 'md',
+  isLoading,
   className,
   children,
+  disabled,
   ...props
 }: ButtonProps) {
   return (
     <button
+      disabled={disabled ?? isLoading}
       className={cn(
-        'inline-flex items-center justify-center font-medium rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:opacity-50 disabled:pointer-events-none',
+        'inline-flex items-center justify-center gap-2 font-medium rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:opacity-50 disabled:pointer-events-none',
         {
           'bg-brand-500 text-white hover:bg-brand-600 active:bg-brand-700':
             variant === 'primary',
@@ -35,6 +39,18 @@ export function Button({
       )}
       {...props}
     >
+      {isLoading && (
+        <svg
+          className="animate-spin shrink-0"
+          style={{ width: size === 'lg' ? 16 : 14, height: size === 'lg' ? 16 : 14 }}
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+      )}
       {children}
     </button>
   )

@@ -161,6 +161,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   const [isEditingName, setIsEditingName]             = useState(false)
   const [nameDraft, setNameDraft]                     = useState('')
   const [isNotifPanelOpen, setIsNotifPanelOpen]       = useState(false)
+  const [isDownloading, setIsDownloading]             = useState(false)
   const [isFamilySwitcherOpen, setIsFamilySwitcherOpen] = useState(false)
   const [joinFamilyOpen, setJoinFamilyOpen]             = useState(false)
   const [joinInviteCode, setJoinInviteCode]             = useState('')
@@ -492,7 +493,8 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   // Download: fit the view first so the export shows the full tree.
   const handleDownload = useCallback(async () => {
     const el = canvasRef.current
-    if (!el) return
+    if (!el || isDownloading) return
+    setIsDownloading(true)
     const savedViewport = getViewport()
     try {
       await fitView({ padding: CANVAS.FIT_PADDING, duration: 0 })
@@ -507,8 +509,9 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
       // Silent fail — toPng can fail on cross-origin images
     } finally {
       setViewport(savedViewport, { duration: 0 })
+      setIsDownloading(false)
     }
-  }, [mapData?.familyName, fitView, getViewport, setViewport])
+  }, [mapData?.familyName, fitView, getViewport, setViewport, isDownloading])
 
   // Highlight only directly-connected edges for the selected node.
   //
@@ -711,11 +714,14 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
               )}
             </button>
             <button
-              onClick={handleDownload}
-              className="p-2 rounded-lg text-slate-500 hover:bg-stone-100 transition-colors"
+              onClick={() => void handleDownload()}
+              disabled={isDownloading}
+              className="p-2 rounded-lg text-slate-500 hover:bg-stone-100 transition-colors disabled:opacity-40"
               title="Download family tree as PNG"
             >
-              <DownloadIcon />
+              {isDownloading
+                ? <svg className="animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                : <DownloadIcon />}
             </button>
             <button
               onClick={handleLogout}
@@ -765,9 +771,9 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
             size={5}
           />
 
-          {/* ── Person + Refresh buttons (above the standard Controls) ───────── */}
+          {/* ── Person + Refresh buttons (bottom-left corner) ───────────────── */}
           {!isCleanView && (
-            <Panel position="bottom-left" style={{ bottom: 110 }}>
+            <Panel position="bottom-left" style={{ bottom: 8 }}>
               <div className="flex flex-col gap-1">
                 {currentUserPersonNode && (
                   <button
@@ -780,10 +786,13 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
                 )}
                 <button
                   onClick={handleRefresh}
+                  disabled={isLoading}
                   className="react-flow__controls-button"
                   title="Reset tree layout"
                 >
-                  <RefreshIcon />
+                  {isLoading
+                    ? <svg className="animate-spin w-3 h-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                    : <RefreshIcon />}
                 </button>
               </div>
             </Panel>
@@ -852,11 +861,11 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
           </div>
         )}
 
-        {/* ── Notification dropdown (compact, top-right) ──────────────────── */}
+        {/* ── Notification dropdown (top-right, above eye icon) ───────────── */}
         {isNotifPanelOpen && (
           <>
             <div className="absolute inset-0 z-[30]" onClick={handleCloseNotif} />
-            <div className="absolute top-12 right-3 z-[31] w-72 bg-white rounded-2xl shadow-xl border border-stone-100 overflow-hidden">
+            <div className="absolute top-3 right-3 z-[50] w-72 bg-white rounded-2xl shadow-xl border border-stone-100 overflow-hidden">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide px-4 pt-3 pb-2">Notifications</p>
               {notifications.length === 0 ? (
                 <p className="text-sm text-slate-400 text-center py-5 px-4">No notifications yet.</p>

@@ -87,7 +87,7 @@ export function LoginForm() {
         type="submit"
         size="lg"
         className="w-full"
-        disabled={loginMutation.isPending}
+        isLoading={loginMutation.isPending}
       >
         {loginMutation.isPending ? 'Signing in…' : 'Sign in'}
       </Button>

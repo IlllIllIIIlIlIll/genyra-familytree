@@ -154,7 +154,7 @@ export default function SetupPage() {
             type="submit"
             size="lg"
             className="w-full"
-            disabled={createMutation.isPending}
+            isLoading={createMutation.isPending}
           >
             {createMutation.isPending ? 'Creating family…' : 'Create my family tree'}
           </Button>

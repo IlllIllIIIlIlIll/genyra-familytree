@@ -232,7 +232,8 @@ export default function EditProfilePage() {
           variant="primary"
           type="submit"
           form="edit-profile-form"
-          disabled={(!isDirty && !pendingAvatar) || isSubmitting}
+          disabled={!isDirty && !pendingAvatar}
+          isLoading={isSubmitting}
         >
           {isSubmitting ? 'Saving…' : 'Save'}
         </Button>

@@ -236,7 +236,7 @@ export function RegisterForm({ onSuccess }: Props) {
           type="submit"
           size="lg"
           className="w-full"
-          disabled={registerMutation.isPending}
+          isLoading={registerMutation.isPending}
         >
           {registerMutation.isPending
             ? 'Creating account…'
