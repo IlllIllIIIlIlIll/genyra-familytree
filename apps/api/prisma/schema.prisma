@@ -86,9 +86,10 @@ model Notification {
   id            String      @id @default(cuid())
   familyGroupId String
   familyGroup   FamilyGroup @relation(fields: [familyGroupId], references: [id])
-  type          String      // 'NEW_MEMBER' | 'MEMBER_DECEASED'
+  type          String
   message       String
   personNodeId  String?
+  readAt        DateTime?
 
   createdAt DateTime @default(now())
 
@@ -185,9 +186,33 @@ model LeaveRequest {
   familyGroupId String
   familyGroup   FamilyGroup        @relation(fields: [familyGroupId], references: [id])
   status        LeaveRequestStatus @default(PENDING)
+  expiresAt     DateTime?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
   @@unique([userId, familyGroupId])
   @@index([familyGroupId])
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  familyGroupId String
+  actorUserId   String
+  action        String
+  targetId      String?
+  details       String?
+  createdAt     DateTime @default(now())
+
+  @@index([familyGroupId, createdAt])
+}
+
+model ShareToken {
+  id              String   @id @default(cuid())
+  token           String   @unique
+  familyGroupId   String
+  createdByUserId String
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+
+  @@index([token])
 }

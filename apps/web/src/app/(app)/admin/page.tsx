@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
 import { useAuthStore, useToastStore } from '@/store/map-store'
 import { cn } from '@/lib/utils'
@@ -229,8 +230,30 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-stone-50 pb-36">
-      <header className="bg-white border-b border-stone-100 px-4 py-4 sticky top-0 z-10">
-        <h1 className="text-base font-semibold text-slate-800">Admin Panel</h1>
+      <header className="bg-white border-b border-stone-100 px-4 py-3 sticky top-0 z-10">
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="text-base font-semibold text-slate-800">Admin Panel</h1>
+        </div>
+        <div className="flex gap-2">
+          <Link
+            href="/members"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium bg-stone-50 hover:bg-stone-100 text-slate-600 rounded-xl transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+              <path d="M7 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM14.5 9a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM1.615 16.428a1.224 1.224 0 0 1-.569-1.175 6.002 6.002 0 0 1 11.908 0c.058.467-.172.92-.57 1.174A9.953 9.953 0 0 1 7 18a9.953 9.953 0 0 1-5.385-1.572ZM14.5 16h-.106c.07-.297.088-.611.048-.933a7.47 7.47 0 0 0-1.588-3.755 4.502 4.502 0 0 1 5.874 2.636.818.818 0 0 1-.36.98A7.465 7.465 0 0 1 14.5 16Z" />
+            </svg>
+            Members
+          </Link>
+          <Link
+            href="/stats"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium bg-stone-50 hover:bg-stone-100 text-slate-600 rounded-xl transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+              <path d="M15.5 2A1.5 1.5 0 0 0 14 3.5v13a1.5 1.5 0 0 0 3 0v-13A1.5 1.5 0 0 0 15.5 2ZM9.5 6A1.5 1.5 0 0 0 8 7.5v9a1.5 1.5 0 0 0 3 0v-9A1.5 1.5 0 0 0 9.5 6ZM3.5 10A1.5 1.5 0 0 0 2 11.5v5a1.5 1.5 0 0 0 3 0v-5A1.5 1.5 0 0 0 3.5 10Z" />
+            </svg>
+            Stats
+          </Link>
+        </div>
       </header>
 
       <div className="p-4 max-w-lg mx-auto space-y-5">
@@ -498,14 +521,14 @@ export default function AdminPage() {
                   {confirmDeleteId === member.id && (
                     <div className="mt-3 space-y-2">
                       <p className="text-xs text-red-500">
-                        Enter <strong>{member.displayName}&apos;s</strong> password to confirm removal. This cannot be undone.
+                        Enter <strong>your own</strong> password to confirm removing <strong>{member.displayName}</strong>. This cannot be undone.
                       </p>
                       <input
                         autoFocus
                         type="password"
                         value={deletePassword}
                         onChange={(e) => setDeletePassword(e.target.value)}
-                        placeholder="Their password"
+                        placeholder="Your password"
                         className="text-xs bg-stone-100 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-1 focus:ring-red-400"
                       />
                       <div className="flex gap-2">

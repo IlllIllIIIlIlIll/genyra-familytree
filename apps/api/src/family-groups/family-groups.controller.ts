@@ -124,6 +124,16 @@ export class FamilyGroupsController {
     return this.familyGroupsService.getLeaveRequests(user.sub, id)
   }
 
+  @Delete(':id/leave')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel the caller\'s own pending leave request' })
+  async cancelLeave(
+    @Param('id') id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<{ message: string }> {
+    return this.familyGroupsService.cancelLeaveRequest(user.sub, id)
+  }
+
   @Patch(':id/leave-requests/:requestId')
   @ApiOperation({ summary: 'Approve or reject a leave request (Family Head only)' })
   async processLeaveRequest(

@@ -75,7 +75,9 @@ export class AuthService {
               source:           { gender: 'MALE' },
             },
           })
-          void existingFather // father-slot checked at edge-creation; skip blocking here
+          if (existingFather) {
+            throw new BadRequestException('This family member already has a registered father')
+          }
         }
 
         if (dto.referrerRelationship === 'REFERRER_IS_SON') {

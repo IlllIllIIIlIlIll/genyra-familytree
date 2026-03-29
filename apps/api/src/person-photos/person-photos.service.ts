@@ -33,9 +33,22 @@ export class PersonPhotosService {
     const personNode = await this.prisma.personNode.findUnique({ where: { id: data.personNodeId } })
     if (!personNode) throw new NotFoundException('Person not found')
 
-    const user = await this.prisma.user.findUnique({ where: { id: requestingUserId } })
+    // H-04: Validate MIME type and file size
+    const VALID_MIME = /^data:image\/(jpeg|jpg|png|webp|gif);base64,/
+    const MAX_BYTES = 6_800_000 // ~5MB
+    if (!VALID_MIME.test(data.url)) {
+      throw new BadRequestException('Invalid image format. Allowed: JPEG, PNG, WebP, GIF.')
+    }
+    if (Buffer.byteLength(data.url, 'utf8') > MAX_BYTES) {
+      throw new BadRequestException('Image too large. Maximum file size is 5MB.')
+    }
+
+    // C-06: Use PersonNode.role scoped to node's family (not User.role)
+    const requesterNode = await this.prisma.personNode.findFirst({
+      where: { userId: requestingUserId, ...(personNode.familyGroupId ? { familyGroupId: personNode.familyGroupId } : {}) },
+    })
     const isSelf = personNode.userId === requestingUserId
-    const isFamilyHead = user?.role === 'FAMILY_HEAD'
+    const isFamilyHead = requesterNode?.role === 'FAMILY_HEAD'
     if (!isSelf && !isFamilyHead) throw new ForbiddenException('You can only add photos to your own profile')
 
     const photo = await this.prisma.personPhoto.create({
@@ -53,13 +66,16 @@ export class PersonPhotosService {
   async delete(id: string, requestingUserId: string): Promise<void> {
     const photo = await this.prisma.personPhoto.findUnique({
       where: { id },
-      include: { personNode: true },
+      include: { personNode: { select: { userId: true, familyGroupId: true } } },
     })
     if (!photo) throw new NotFoundException('Photo not found')
 
-    const user = await this.prisma.user.findUnique({ where: { id: requestingUserId } })
+    // C-06: Use PersonNode.role scoped to node's family (not User.role)
+    const requesterNode = await this.prisma.personNode.findFirst({
+      where: { userId: requestingUserId, ...(photo.personNode.familyGroupId ? { familyGroupId: photo.personNode.familyGroupId } : {}) },
+    })
     const isSelf = photo.personNode.userId === requestingUserId
-    const isFamilyHead = user?.role === 'FAMILY_HEAD'
+    const isFamilyHead = requesterNode?.role === 'FAMILY_HEAD'
 
     if (!isSelf && !isFamilyHead) {
       throw new ForbiddenException('You can only delete your own photos')

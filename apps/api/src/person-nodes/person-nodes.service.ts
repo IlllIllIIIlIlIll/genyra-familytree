@@ -69,9 +69,12 @@ export class PersonNodesService {
     const node = await this.prisma.personNode.findUnique({ where: { id } })
     if (!node) throw new NotFoundException('Person node not found')
 
-    const user = await this.prisma.user.findUnique({ where: { id: requestingUserId } })
+    // C-06: Use PersonNode.role scoped to node's family (not User.role)
+    const requesterNode = await this.prisma.personNode.findFirst({
+      where: { userId: requestingUserId, ...(node.familyGroupId ? { familyGroupId: node.familyGroupId } : {}) },
+    })
     const isSelf = node.userId === requestingUserId
-    const isFamilyHead = user?.role === 'FAMILY_HEAD'
+    const isFamilyHead = requesterNode?.role === 'FAMILY_HEAD'
 
     if (!isSelf && !isFamilyHead) {
       throw new ForbiddenException('You can only edit your own profile')
@@ -141,6 +144,14 @@ export class PersonNodesService {
       where: { userId: requestingUserId, role: 'FAMILY_HEAD', familyGroupId: { not: null } },
     })
     if (!headNode) throw new ForbiddenException('Only Family Head can delete person nodes')
+
+    // C-02: Verify the target node belongs to the head's family
+    const node = await this.prisma.personNode.findUnique({ where: { id } })
+    if (!node) throw new NotFoundException('Person node not found')
+    if (node.familyGroupId !== headNode.familyGroupId) {
+      throw new ForbiddenException('This person does not belong to your family')
+    }
+
     await this.prisma.personNode.delete({ where: { id } })
   }
 
@@ -166,6 +177,7 @@ export class PersonNodesService {
   }
 
   async addChild(dto: AddChildDto, requestingUserId: string): Promise<PersonNode> {
+    // C-03: Create only a PersonNode (no User account / no NIK required)
     const user = await this.prisma.user.findUnique({
       where:   { id: requestingUserId },
       include: { personNodes: { where: { familyGroupId: { not: null } }, take: 1 } },
@@ -174,10 +186,6 @@ export class PersonNodesService {
     if (!activeNode?.familyGroupId) {
       throw new ForbiddenException('You must be in a family group to add a child')
     }
-
-    // Check NIK uniqueness
-    const existingNik = await this.prisma.user.findUnique({ where: { nik: dto.nik } })
-    if (existingNik) throw new BadRequestException('This NIK is already registered')
 
     // Must have a spouse relationship
     const spouseEdge = await this.prisma.relationshipEdge.findFirst({
@@ -195,21 +203,14 @@ export class PersonNodesService {
     const spouseId      = spouseEdge.sourceId === activeNode.id
       ? spouseEdge.targetId
       : spouseEdge.sourceId
-    const isFamilyHead  = user!.role === 'FAMILY_HEAD'
+    // C-06: Use PersonNode.role scoped to the active family
+    const requesterNode = await this.prisma.personNode.findFirst({
+      where: { userId: requestingUserId, familyGroupId: activeNode.familyGroupId },
+    })
+    const isFamilyHead  = requesterNode?.role === 'FAMILY_HEAD'
     const familyGroupId = activeNode.familyGroupId
-    // Child inherits parent's passwordHash so they can log in with the family password
-    const passwordHash  = user!.passwordHash
 
     const child = await this.prisma.$transaction(async (tx) => {
-      const childUser = await tx.user.create({
-        data: {
-          nik:          dto.nik,
-          passwordHash,
-          role:         'FAMILY_MEMBER',
-          status:       isFamilyHead ? 'ACTIVE' : 'PENDING_APPROVAL',
-        },
-      })
-
       const childNode = await tx.personNode.create({
         data: {
           displayName:     dto.displayName,
@@ -218,8 +219,9 @@ export class PersonNodesService {
           birthDate:       dto.birthDate ? new Date(dto.birthDate) : null,
           birthPlace:      dto.birthPlace ?? null,
           familyGroupId,
+          isPlaceholder:   false,
           pendingApproval: !isFamilyHead,
-          userId:          childUser.id,
+          userId:          null,
         },
         include: { user: { select: { nik: true } } },
       })
@@ -238,14 +240,41 @@ export class PersonNodesService {
     return this.toDto(child)
   }
 
-  async approve(id: string, requestingUserId: string): Promise<PersonNode> {
-    const requestingUser = await this.prisma.user.findUnique({ where: { id: requestingUserId } })
-    if (requestingUser?.role !== 'FAMILY_HEAD') {
-      throw new ForbiddenException('Only Family Head can approve pending members')
-    }
+  async search(q: string, requestingUserId: string): Promise<PersonNode[]> {
+    // H-06: Search persons in requester's current family
+    const user = await this.prisma.user.findUnique({
+      where: { id: requestingUserId },
+      include: { personNodes: { where: { familyGroupId: { not: null } }, take: 1 } },
+    })
+    const familyGroupId = user?.personNodes[0]?.familyGroupId
+    if (!familyGroupId) return []
 
+    const nodes = await this.prisma.personNode.findMany({
+      where: {
+        familyGroupId,
+        pendingApproval: false,
+        OR: [
+          { displayName: { contains: q, mode: 'insensitive' } },
+          { surname:      { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      take: 10,
+      include: { user: { select: { nik: true } } },
+    })
+    return nodes.map((n) => this.toDto(n))
+  }
+
+  async approve(id: string, requestingUserId: string): Promise<PersonNode> {
     const node = await this.prisma.personNode.findUnique({ where: { id } })
     if (!node) throw new NotFoundException('Person node not found')
+
+    // C-06: Use PersonNode.role scoped to node's family
+    const requesterNode = await this.prisma.personNode.findFirst({
+      where: { userId: requestingUserId, ...(node.familyGroupId ? { familyGroupId: node.familyGroupId } : {}) },
+    })
+    if (requesterNode?.role !== 'FAMILY_HEAD') {
+      throw new ForbiddenException('Only Family Head can approve pending members')
+    }
 
     const updated = await this.prisma.personNode.update({
       where: { id },

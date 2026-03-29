@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
+import { Throttle, SkipThrottle } from '@nestjs/throttler'
 import { AuthService } from './auth.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator'
@@ -13,6 +14,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
+  @Throttle({ long: { ttl: 900_000, limit: 10 } })
   @ApiOperation({ summary: 'Register with an invite code' })
   async register(@Body() body: unknown): Promise<{ message: string }> {
     const dto = RegisterSchema.parse(body) satisfies RegisterDto
@@ -21,6 +23,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ long: { ttl: 900_000, limit: 10 } })
   @ApiOperation({ summary: 'Login and receive tokens' })
   async login(@Body() body: unknown): Promise<AuthTokens> {
     const dto = LoginSchema.parse(body) satisfies LoginDto
@@ -63,6 +66,7 @@ export class AuthController {
   }
 
   @Get('my-families')
+  @SkipThrottle()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List all families the current user belongs to' })

@@ -142,7 +142,7 @@ User ──< PersonNode >── FamilyGroup
 - All API calls from the frontend go through `apps/web/src/lib/api-client.ts` — never direct `fetch` in components
 - JWT access + refresh token pair; refresh token stored hashed in DB
 - Canvas position updates verify family membership before writing
-- Force-remove a member requires entering their password (verified with argon2) to prevent accidental removal
+- Force-remove a member requires the **Family Head to enter their own password** (verified with argon2) to prevent accidental removal
 - Zod validates all request bodies at the controller boundary
 - Role authorization uses `PersonNode.role` (per-family scope), not the legacy `User.role` field
 
@@ -169,6 +169,35 @@ npx prisma db seed
 ```
 
 ## Changelog
+
+### 2026-03-30 — Security Hardening & Feature Sprint
+
+**Security (6 critical / high fixes):**
+- **C-01** Fixed cross-family relationship creation — `create` and `delete` now verify both nodes belong to the requesting head's family before writing
+- **C-02** Fixed cross-family node deletion — `delete` verifies the target node belongs to the head's own family
+- **C-03** `addChild` no longer creates a User account or copies a password hash; it creates a PersonNode only (no NIK required)
+- **C-05** `updateStatus` scopes PersonNode approval to the correct `familyGroupId`, preventing cross-family approval pollution
+- **C-06** All role checks migrated from `User.role` to `PersonNode.role` (per-family scope) across all services (person-nodes, person-photos, relationships)
+- **H-01** Rate limiting: global throttler (20 req/s, 60 req/10 s, 120 req/min); auth endpoints hardened to 10 req/15 min
+- **H-02** Invite code strengthened: 8 characters from an expanded unambiguous charset (`ABCDEFGHJKLMNPQRSTUVWXYZ23456789`)
+- **H-04** Photo uploads now validate MIME type (jpeg/png/webp/gif) and cap size at 5 MB per upload
+
+**New backend features:**
+- **Audit log** — new `AuditLog` model; `AuditService` writes structured entries (actor, action, targetId, details)
+- **Share links** — Family Head can generate a 30-day read-only share token (`POST /share/token`); unauthenticated viewers get map data via `GET /share/:token`
+- **Cancel leave request** — member can now cancel their own pending leave request (`DELETE /family-groups/:id/leave`)
+- **Notification read/dismiss** — `PATCH /notifications/:id/read` and `DELETE /notifications/:id`
+- **Leave request expiry** — `expiresAt` set to +7 days on creation; hourly cron job (`@nestjs/schedule`) auto-expires stale PENDING requests
+- **Schema additions:** `AuditLog`, `ShareToken` models; `Notification.readAt`, `LeaveRequest.expiresAt` fields
+
+**Frontend improvements:**
+- **H-08** Canvas respects manually dragged positions — nodes with stored `canvasX/canvasY` keep their position across re-layouts
+- **M-06** Profile save is now optimistic — the canvas updates instantly on submit; rolls back on error
+- **L-08** New `/members` page — Family Head can view all active members, see their NIK, and remove them with password confirmation
+- **L-01** New `/stats` page — family statistics: total / living / deceased, gender breakdown, generation count, average age, oldest / youngest, marriages and divorces
+- **L-05** PWA manifest (`/manifest.json`) — app is installable on Android/iOS with correct theme color, start URL, and icon
+- **api-client:** added `searchPersons`, `cancelLeaveRequest`, `markNotificationRead`, `dismissNotification`, `createShareToken`, `getPublicMapData`; fixed `deleteUser` to send `headPassword` (not the target's password)
+- **Admin panel** — quick-nav links to Members and Stats pages; corrected password prompt copy ("your password" not "their password")
 
 ### 2026-03-22
 - **Multi-family:** users can belong to up to 3 families, own at most 1

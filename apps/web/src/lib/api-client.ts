@@ -108,8 +108,8 @@ export const apiClient = {
     return data
   },
 
-  deleteUser: async (userId: string, targetPassword: string): Promise<void> => {
-    await http.delete(`/users/${userId}`, { data: { targetPassword } })
+  deleteUser: async (userId: string, headPassword: string): Promise<void> => {
+    await http.delete(`/users/${userId}`, { data: { headPassword } })
   },
 
   updateUserStatus: async (userId: string, status: MemberStatus): Promise<User> => {
@@ -322,6 +322,39 @@ export const apiClient = {
   // Admin NIK update
   adminUpdateNik: async (userId: string, nik: string): Promise<User> => {
     const { data } = await http.patch<User>(`/users/${userId}/nik`, { nik })
+    return data
+  },
+
+  // Search persons in current family
+  searchPersons: async (q: string): Promise<PersonNode[]> => {
+    const { data } = await http.get<PersonNode[]>(`/person-nodes/search?q=${encodeURIComponent(q)}`)
+    return data
+  },
+
+  // Cancel own leave request
+  cancelLeaveRequest: async (familyGroupId: string): Promise<{ message: string }> => {
+    const { data } = await http.delete<{ message: string }>(`/family-groups/${familyGroupId}/leave`)
+    return data
+  },
+
+  // Mark notification as read
+  markNotificationRead: async (id: string): Promise<void> => {
+    await http.patch(`/notifications/${id}/read`)
+  },
+
+  // Dismiss (delete) a notification
+  dismissNotification: async (id: string): Promise<void> => {
+    await http.delete(`/notifications/${id}`)
+  },
+
+  // Share token
+  createShareToken: async (): Promise<{ token: string; expiresAt: string }> => {
+    const { data } = await http.post<{ token: string; expiresAt: string }>('/share/token')
+    return data
+  },
+
+  getPublicMapData: async (token: string): Promise<{ familyName: string; nodes: PersonNode[]; edges: RelationshipEdge[] }> => {
+    const { data } = await http.get<{ familyName: string; nodes: PersonNode[]; edges: RelationshipEdge[] }>(`/share/${token}`)
     return data
   },
 }

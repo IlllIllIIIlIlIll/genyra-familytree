@@ -103,16 +103,47 @@ export default function EditProfilePage() {
         ...(pendingAvatar !== null && { avatarUrl: pendingAvatar }),
       })
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['map-data', familyGroupId] })
-      toast('Profile updated', 'success')
-      router.back()
+    // M-06: optimistic update — patch the cached map-data immediately
+    onMutate: async (values) => {
+      const queryKey = ['map-data', familyGroupId]
+      await queryClient.cancelQueries({ queryKey })
+      const previous = queryClient.getQueryData(queryKey)
+      queryClient.setQueryData(queryKey, (old: { nodes: { id: string }[]; edges: unknown[]; familyName: string } | undefined) => {
+        if (!old) return old
+        return {
+          ...old,
+          nodes: old.nodes.map((n) =>
+            n.id !== personId ? n : {
+              ...n,
+              displayName: values.displayName,
+              surname:     values.surname || null,
+              gender:      values.gender ?? null,
+              birthDate:   values.birthDate ? new Date(values.birthDate).toISOString() : null,
+              deathDate:   values.deathDate ? new Date(values.deathDate).toISOString() : null,
+              birthPlace:  values.birthPlace || null,
+              bio:         values.bio || null,
+              isDeceased:  values.isDeceased ?? false,
+              ...(pendingAvatar !== null && { avatarUrl: pendingAvatar }),
+            },
+          ),
+        }
+      })
+      return { previous, queryKey }
     },
-    onError: (err: unknown) => {
+    onError: (err, _values, context) => {
+      // Rollback on error
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(context.queryKey, context.previous)
+      }
       const msg =
         (err as { response?: { data?: { message?: string } } })
           ?.response?.data?.message ?? 'Failed to save profile'
       toast(msg, 'error')
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['map-data', familyGroupId] })
+      toast('Profile updated', 'success')
+      router.back()
     },
   })
 

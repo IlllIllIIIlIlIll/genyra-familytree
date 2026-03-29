@@ -32,7 +32,8 @@
       "Bash(del:*)",
       "Bash(npx tsc:*)",
       "Bash(1:*)",
-      "Bash(\"C:/Users/Lenovo/Documents/GitHub/genyra-familytree/README.md\":*)"
+      "Bash(\"C:/Users/Lenovo/Documents/GitHub/genyra-familytree/README.md\":*)",
+      "Bash(npx nest:*)"
     ]
   }
 }

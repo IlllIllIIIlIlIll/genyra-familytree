@@ -32,6 +32,34 @@ export class NotificationsService {
     }))
   }
 
+  async markRead(id: string, requestingUserId: string): Promise<void> {
+    const notif = await this.prisma.notification.findUnique({ where: { id } })
+    if (!notif) return
+
+    // Verify user belongs to this family
+    const member = await this.prisma.personNode.findFirst({
+      where: { userId: requestingUserId, familyGroupId: notif.familyGroupId },
+    })
+    if (!member) throw new ForbiddenException('Not a member of this family')
+
+    await this.prisma.notification.update({
+      where: { id },
+      data:  { readAt: new Date() },
+    })
+  }
+
+  async dismiss(id: string, requestingUserId: string): Promise<void> {
+    const notif = await this.prisma.notification.findUnique({ where: { id } })
+    if (!notif) return
+
+    const member = await this.prisma.personNode.findFirst({
+      where: { userId: requestingUserId, familyGroupId: notif.familyGroupId },
+    })
+    if (!member) throw new ForbiddenException('Not a member of this family')
+
+    await this.prisma.notification.delete({ where: { id } })
+  }
+
   /** Call after creating a new notification to prune old ones beyond the cap. */
   async pruneForFamily(familyGroupId: string): Promise<void> {
     const all = await this.prisma.notification.findMany({

@@ -75,7 +75,7 @@ export const AddChildSchema = z.object({
   displayName: z.string().min(1, 'Full name is required').max(100),
   gender:      GenderSchema.optional(),
   surname:     z.string().min(1, 'Nickname is required').max(50).regex(/^\S+$/, 'Nickname must be a single word'),
-  nik:         z.string().length(16, 'NIK must be exactly 16 digits').regex(/^\d{16}$/, 'NIK must be exactly 16 digits'),
+  nik:         z.string().length(16, 'NIK must be exactly 16 digits').regex(/^\d{16}$/, 'NIK must be exactly 16 digits').optional(),
   birthDate:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Please enter a valid date'),
   birthPlace:  z.string().min(1, 'Place of birth is required').max(100),
 })

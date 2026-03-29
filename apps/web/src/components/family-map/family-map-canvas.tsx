@@ -317,7 +317,11 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
     const { positions, edges: edgeMetas } = computeFamilyLayout(filteredMapData)
 
     const personNodes: Node<FlowNodeData>[] = filteredMapData.nodes.map((n) => {
-      const pos = positions.get(n.id) ?? { x: n.canvasX, y: n.canvasY }
+      // H-08: prefer stored position when user has manually dragged the node
+      const hasStoredPos = n.canvasX !== 0 || n.canvasY !== 0
+      const pos = hasStoredPos
+        ? { x: n.canvasX, y: n.canvasY }
+        : (positions.get(n.id) ?? { x: 0, y: 0 })
       return {
         id: n.id, type: 'personNode', position: pos,
         data: { node: n, isCurrentUser: n.userId === currentUserId } satisfies PersonNodeData,

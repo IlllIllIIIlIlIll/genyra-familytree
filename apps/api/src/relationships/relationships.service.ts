@@ -20,6 +20,18 @@ export class RelationshipsService {
       throw new ForbiddenException('Only Family Head can create relationships')
     }
 
+    // C-01: Verify both nodes belong to the head's family
+    const [sourceNode, targetNode] = await Promise.all([
+      this.prisma.personNode.findUnique({ where: { id: dto.sourceId }, select: { familyGroupId: true } }),
+      this.prisma.personNode.findUnique({ where: { id: dto.targetId }, select: { familyGroupId: true } }),
+    ])
+    if (
+      sourceNode?.familyGroupId !== headNode.familyGroupId ||
+      targetNode?.familyGroupId !== headNode.familyGroupId
+    ) {
+      throw new ForbiddenException('Both nodes must belong to your family')
+    }
+
     const existing = await this.prisma.relationshipEdge.findFirst({
       where: {
         sourceId: dto.sourceId,
@@ -62,6 +74,17 @@ export class RelationshipsService {
     if (!headNode) {
       throw new ForbiddenException('Only Family Head can delete relationships')
     }
+
+    // C-01: Verify edge belongs to head's family
+    const edge = await this.prisma.relationshipEdge.findUnique({
+      where: { id },
+      include: { source: { select: { familyGroupId: true } } },
+    })
+    if (!edge) throw new NotFoundException('Relationship not found')
+    if (edge.source.familyGroupId !== headNode.familyGroupId) {
+      throw new ForbiddenException('This relationship does not belong to your family')
+    }
+
     await this.prisma.relationshipEdge.delete({ where: { id } })
   }
 

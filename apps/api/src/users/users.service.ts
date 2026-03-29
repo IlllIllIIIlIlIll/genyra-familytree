@@ -43,23 +43,33 @@ export class UsersService {
       .map((u) => this.toUserDto(u, u.personNodes[0]!))
   }
 
-  async deleteUser(targetId: string, requestingUserId: string, targetPassword: string): Promise<void> {
-    const [requesterNode, target] = await Promise.all([
+  async deleteUser(targetId: string, requestingUserId: string, headPassword: string): Promise<void> {
+    const [requesterNode, requester, target] = await Promise.all([
       this.prisma.personNode.findFirst({ where: { userId: requestingUserId, role: 'FAMILY_HEAD', familyGroupId: { not: null } } }),
+      this.prisma.user.findUnique({ where: { id: requestingUserId } }),
       this.prisma.user.findUnique({ where: { id: targetId }, include: { personNodes: { take: 1 } } }),
     ])
     if (!requesterNode) throw new ForbiddenException('Only Family Head can remove members')
+    if (!requester) throw new NotFoundException('Requester not found')
     if (!target) throw new NotFoundException('User not found')
     if (target.id === requestingUserId) throw new ForbiddenException('You cannot remove yourself')
     if (target.role === 'FAMILY_HEAD') throw new ForbiddenException('Cannot remove another Family Head')
 
-    // Verify the target member's password
-    const valid = await argon2.verify(target.passwordHash, targetPassword)
-    if (!valid) throw new UnauthorizedException('Incorrect password for that member')
+    // M-10: Verify the head's own password (not the target's)
+    const valid = await argon2.verify(requester.passwordHash, headPassword)
+    if (!valid) throw new UnauthorizedException('Incorrect password')
 
     await this.prisma.$transaction(async (tx) => {
+      // M-11: Soft-delete — convert to placeholder to preserve relationships
       if (target.personNodes[0]) {
-        await tx.personNode.delete({ where: { id: target.personNodes[0].id } })
+        await tx.personNode.update({
+          where: { id: target.personNodes[0].id },
+          data: {
+            isPlaceholder: true,
+            userId: null,
+            displayName: target.personNodes[0].displayName + ' (removed)',
+          },
+        })
       }
       await tx.user.delete({ where: { id: targetId } })
     })
@@ -78,10 +88,10 @@ export class UsersService {
       .map((u) => this.toUserDto(u, u.personNodes[0]!))
   }
 
-  async updateStatus(userId: string, status: MemberStatus): Promise<User> {
+  async updateStatus(userId: string, status: MemberStatus, familyGroupId: string): Promise<User> {
     const existing = await this.prisma.user.findUnique({
       where:   { id: userId },
-      include: { personNodes: { take: 1 } },
+      include: { personNodes: { where: { familyGroupId }, take: 1 } },
     })
     if (!existing || !existing.personNodes[0]) throw new NotFoundException('User not found')
 
@@ -100,10 +110,11 @@ export class UsersService {
       data:  {
         status,
         ...(status === 'ACTIVE' && {
-          personNodes: { updateMany: { where: {}, data: { pendingApproval: false } } },
+          // C-05: Scope updateMany to this family only
+          personNodes: { updateMany: { where: { familyGroupId }, data: { pendingApproval: false } } },
         }),
       },
-      include: { personNodes: { take: 1 } },
+      include: { personNodes: { where: { familyGroupId }, take: 1 } },
     })
 
     if (status === 'ACTIVE' && user.personNodes[0]) {

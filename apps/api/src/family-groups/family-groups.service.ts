@@ -439,10 +439,12 @@ export class FamilyGroupsService {
     })
     if (existing?.status === 'PENDING') throw new ConflictException('A leave request is already pending')
 
+    // M-09: set expiresAt to 7 days from now
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     await this.prisma.leaveRequest.upsert({
       where: { userId_familyGroupId: { userId, familyGroupId } },
-      create: { userId, familyGroupId, status: 'PENDING' },
-      update: { status: 'PENDING', updatedAt: new Date() },
+      create: { userId, familyGroupId, status: 'PENDING', expiresAt },
+      update: { status: 'PENDING', expiresAt, updatedAt: new Date() },
     })
 
     // Create notification for family head
@@ -519,6 +521,21 @@ export class FamilyGroupsService {
       })
       return { message: 'Leave request rejected.' }
     }
+  }
+
+  // M-08: Cancel a pending leave request
+  async cancelLeaveRequest(userId: string, familyGroupId: string): Promise<{ message: string }> {
+    const request = await this.prisma.leaveRequest.findUnique({
+      where: { userId_familyGroupId: { userId, familyGroupId } },
+    })
+    if (!request || request.status !== 'PENDING') {
+      throw new NotFoundException('No pending leave request found')
+    }
+    await this.prisma.leaveRequest.update({
+      where: { id: request.id },
+      data:  { status: 'REJECTED' },
+    })
+    return { message: 'Leave request cancelled.' }
   }
 
   private toFamilyGroupDto(group: {

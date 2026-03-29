@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common'
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { PersonNodesService } from './person-nodes.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
@@ -17,6 +17,15 @@ export class PersonNodesController {
   @ApiOperation({ summary: 'Get unlinked person nodes (no User account) — Family Head only' })
   async findUnlinked(@CurrentUser() user: JwtPayload): Promise<PersonNode[]> {
     return this.personNodesService.findUnlinked(user.sub)
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search person nodes by name within the current family' })
+  async search(
+    @Query('q') q: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<PersonNode[]> {
+    return this.personNodesService.search(q ?? '', user.sub)
   }
 
   @Get(':id')

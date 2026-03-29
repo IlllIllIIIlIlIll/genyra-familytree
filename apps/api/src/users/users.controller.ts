@@ -61,8 +61,9 @@ export class UsersController {
   async updateStatus(
     @Param('id') id: string,
     @Body() body: { status: MemberStatus },
+    @CurrentUser() user: JwtPayload,
   ): Promise<User> {
-    return this.usersService.updateStatus(id, body.status)
+    return this.usersService.updateStatus(id, body.status, user.fid)
   }
 
   @Patch(':id/nik')
@@ -80,12 +81,12 @@ export class UsersController {
   @Delete(':id')
   @UseGuards(RolesGuard)
   @Roles('FAMILY_HEAD')
-  @ApiOperation({ summary: 'Permanently remove a family member (Family Head only)' })
+  @ApiOperation({ summary: 'Remove a family member (Family Head only, requires head\'s own password)' })
   async deleteUser(
     @Param('id') id: string,
-    @Body() body: { targetPassword: string },
+    @Body() body: { headPassword: string },
     @CurrentUser() user: JwtPayload,
   ): Promise<void> {
-    return this.usersService.deleteUser(id, user.sub, body.targetPassword)
+    return this.usersService.deleteUser(id, user.sub, body.headPassword)
   }
 }

@@ -10,6 +10,12 @@ const inter = Inter({ subsets: ['latin'] })
 export const metadata: Metadata = {
   title: 'Genyra — Your Family Tree',
   description: 'Explore your family lineage on an interactive map',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Genyra',
+  },
 }
 
 export const viewport: Viewport = {
