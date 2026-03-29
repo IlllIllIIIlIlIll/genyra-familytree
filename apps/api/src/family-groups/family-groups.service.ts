@@ -265,8 +265,7 @@ export class FamilyGroupsService {
       this.prisma.personNode.findMany({
         where: { familyGroupId: groupId, pendingApproval: false },
         include: {
-          photos: { orderBy: { sortOrder: 'asc' }, take: 1 },
-          user:   { select: { nik: true } },
+          user: { select: { nik: true } },
         },
       }),
       this.prisma.relationshipEdge.findMany({
@@ -287,7 +286,7 @@ export class FamilyGroupsService {
       birthPlace: n.birthPlace ?? null,
       deathDate: n.deathDate?.toISOString() ?? null,
       bio: n.bio ?? null,
-      avatarUrl: n.photos[0]?.url ?? sanitizeAvatarUrl(n.avatarUrl),
+      avatarUrl: sanitizeAvatarUrl(n.avatarUrl),
       isDeceased: n.isDeceased,
       isPlaceholder: n.isPlaceholder,
       pendingApproval: n.pendingApproval,
