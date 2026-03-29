@@ -305,6 +305,15 @@ export default function AdminPage() {
           ) : null}
         </div>
 
+        {/* ── Share family tree card ────────────────────────────────────────── */}
+        <div className="bg-white rounded-2xl border border-stone-100 p-5">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Share Family Tree</p>
+          <p className="text-xs text-slate-400 mb-3">
+            Generate a read-only link valid for 30 days. Anyone with the link can view (not edit) the family tree.
+          </p>
+          <ShareLinkSection familyGroupId={familyGroupId ?? ''} />
+        </div>
+
         {/* ── Pending approvals ─────────────────────────────────────────────── */}
         <div>
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">
@@ -637,5 +646,59 @@ export default function AdminPage() {
 
       </div>
     </div>
+  )
+}
+
+function ShareLinkSection({ familyGroupId }: { familyGroupId: string }) {
+  const toast = useToastStore((s) => s.toast)
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [copied, setCopied]     = useState(false)
+
+  const createTokenMutation = useMutation({
+    mutationFn: () => apiClient.createShareToken(),
+    onSuccess: ({ token }) => {
+      const url = `${window.location.origin}/share/${token}`
+      setShareUrl(url)
+    },
+    onError: () => toast('Failed to create share link', 'error'),
+  })
+
+  const handleCopy = () => {
+    if (!shareUrl) return
+    void navigator.clipboard.writeText(shareUrl)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  if (shareUrl) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 p-2 bg-stone-50 rounded-xl border border-stone-100">
+          <p className="text-[10px] font-mono text-slate-600 flex-1 break-all leading-relaxed">{shareUrl}</p>
+          <button
+            onClick={handleCopy}
+            className="shrink-0 px-2 py-1 text-xs font-medium bg-white border border-stone-200 text-slate-600 rounded-lg hover:bg-stone-100 transition-colors"
+          >
+            {copied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+        <button
+          onClick={() => { setShareUrl(null) }}
+          className="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+        >
+          Generate another link
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      onClick={() => createTokenMutation.mutate()}
+      disabled={createTokenMutation.isPending}
+      className="w-full py-2 text-xs font-medium text-brand-600 bg-brand-50 hover:bg-brand-100 rounded-xl transition-colors disabled:opacity-50"
+    >
+      {createTokenMutation.isPending ? 'Generating…' : 'Generate share link'}
+    </button>
   )
 }

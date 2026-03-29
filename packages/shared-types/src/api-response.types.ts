@@ -53,6 +53,7 @@ export const NotificationSchema = z.object({
   type:          z.string(),
   message:       z.string(),
   personNodeId:  z.string().nullable(),
+  readAt:        z.string().datetime().nullable().optional(),
   createdAt:     z.string().datetime(),
 })
 export type Notification = z.infer<typeof NotificationSchema>

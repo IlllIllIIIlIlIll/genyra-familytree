@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
@@ -15,6 +16,7 @@ import { cn } from '@/lib/utils'
 export default function SetupPage() {
   const router = useRouter()
   const { setFamilyGroupId } = useAuthStore()
+  const [noPartner, setNoPartner] = useState(false)
 
   const {
     register,
@@ -41,7 +43,12 @@ export default function SetupPage() {
     },
   })
 
-  const onSubmit = handleSubmit((data) => createMutation.mutate(data))
+  const onSubmit = handleSubmit((data) => {
+    const payload = noPartner
+      ? { ...data, otherParentName: data.userIsParent === 'FATHER' ? 'Ibu' : 'Ayah', otherParentSurname: undefined }
+      : data
+    createMutation.mutate(payload)
+  })
 
   return (
     <main className="min-h-screen flex items-center justify-center p-4 bg-brand-50">
@@ -54,7 +61,7 @@ export default function SetupPage() {
           />
           <h1 className={cn(FONT.HEADING_LG, 'font-semibold text-slate-800')}>Create your family tree</h1>
           <p className={cn(FONT.BODY, 'text-slate-500 mt-1')}>
-            You need at least a father and mother to start. You are one of them.
+            Set up your family tree. Add your partner now or later.
           </p>
         </div>
 
@@ -97,23 +104,47 @@ export default function SetupPage() {
             )}
           </div>
 
-          {/* Other parent */}
-          <Input
-            id="otherParentName"
-            label={userIsParent === 'FATHER' ? "Mother's Full Name" : "Father's Full Name"}
-            placeholder={userIsParent === 'FATHER' ? 'Sri Mulyani' : 'Ahmad Santoso'}
-            maxLength={MAX_CHARS.DISPLAY_NAME}
-            {...register('otherParentName')}
-            error={errors.otherParentName?.message ?? undefined}
-          />
+          {/* No partner toggle */}
+          <div className="flex items-center justify-between py-1">
+            <span className={cn(FONT.BODY, 'text-slate-700')}>No partner yet</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={noPartner}
+              onClick={() => setNoPartner((v) => !v)}
+              className={cn(
+                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+                noPartner ? 'bg-brand-500' : 'bg-stone-200',
+              )}
+            >
+              <span className={cn(
+                'inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform',
+                noPartner ? 'translate-x-6' : 'translate-x-1',
+              )} />
+            </button>
+          </div>
 
-          <Input
-            id="otherParentSurname"
-            label={`${userIsParent === 'FATHER' ? "Mother's" : "Father's"} Surname (optional)`}
-            placeholder="Mulyani"
-            {...register('otherParentSurname')}
-            error={errors.otherParentSurname?.message ?? undefined}
-          />
+          {/* Other parent */}
+          {!noPartner && (
+            <>
+              <Input
+                id="otherParentName"
+                label={userIsParent === 'FATHER' ? "Mother's Full Name" : "Father's Full Name"}
+                placeholder={userIsParent === 'FATHER' ? 'Sri Mulyani' : 'Ahmad Santoso'}
+                maxLength={MAX_CHARS.DISPLAY_NAME}
+                {...register('otherParentName')}
+                error={errors.otherParentName?.message ?? undefined}
+              />
+
+              <Input
+                id="otherParentSurname"
+                label={`${userIsParent === 'FATHER' ? "Mother's" : "Father's"} Surname (optional)`}
+                placeholder="Mulyani"
+                {...register('otherParentSurname')}
+                error={errors.otherParentSurname?.message ?? undefined}
+              />
+            </>
+          )}
 
           {errors.root && (
             <p className="text-sm text-red-500 text-center">{errors.root.message}</p>

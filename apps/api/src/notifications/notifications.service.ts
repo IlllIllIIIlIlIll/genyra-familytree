@@ -28,6 +28,7 @@ export class NotificationsService {
       type:          n.type,
       message:       n.message,
       personNodeId:  n.personNodeId ?? null,
+      readAt:        n.readAt?.toISOString() ?? null,
       createdAt:     n.createdAt.toISOString(),
     }))
   }

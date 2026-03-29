@@ -220,6 +220,13 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
     },
   })
 
+  const dismissNotifMutation = useMutation({
+    mutationFn: (id: string) => apiClient.dismissNotification(id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    },
+  })
+
   const joinAdditionalMutation = useMutation({
     mutationFn: (code: string) => apiClient.joinAdditionalFamily(code),
     onSuccess: (res) => {
@@ -254,6 +261,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   const [rawEdges, setRawEdges, onEdgesChange] = useEdgesState<Edge>([])
   const positionSaveTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const shouldFitViewRef   = useRef(false)
+  const forceAutoLayoutRef = useRef(false)
   const [layoutVersion, setLayoutVersion] = useState(0)
   const [translateExtent, setTranslateExtent] = useState<[[number, number], [number, number]]>(
     [[-Infinity, -Infinity], [Infinity, Infinity]],
@@ -318,8 +326,8 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
 
     const personNodes: Node<FlowNodeData>[] = filteredMapData.nodes.map((n) => {
       // H-08: prefer stored position when user has manually dragged the node
-      const hasStoredPos = n.canvasX !== 0 || n.canvasY !== 0
-      const pos = hasStoredPos
+      const useStored = !forceAutoLayoutRef.current && (n.canvasX !== 0 || n.canvasY !== 0)
+      const pos = useStored
         ? { x: n.canvasX, y: n.canvasY }
         : (positions.get(n.id) ?? { x: 0, y: 0 })
       return {
@@ -364,6 +372,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
         })
       })
     }
+    forceAutoLayoutRef.current = false
   // layoutVersion forces re-layout even when mapData hasn't changed (drag reset).
   // genOffset triggers a new layout when the generation window slides.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -462,6 +471,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   // mapData hasn't changed), and flag fitView to fire after re-layout.
   const handleRefresh = useCallback(() => {
     shouldFitViewRef.current = true
+    forceAutoLayoutRef.current = true
     setLayoutVersion((v) => v + 1)
     void queryClient.invalidateQueries({ queryKey: ['map-data', familyGroupId] })
   }, [queryClient, familyGroupId])
@@ -853,11 +863,23 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
               ) : (
                 <ul className="divide-y divide-stone-50 max-h-72 overflow-y-auto">
                   {notifications.map((n: Notification) => (
-                    <li key={n.id} className="px-4 py-3">
-                      <p className="text-xs text-slate-700 leading-snug">{n.message}</p>
-                      <p className="text-[10px] text-slate-400 mt-1">
-                        {new Date(n.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </p>
+                    <li key={n.id} className="px-4 py-3 flex items-start gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-slate-700 leading-snug">{n.message}</p>
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          {new Date(n.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => dismissNotifMutation.mutate(n.id)}
+                        disabled={dismissNotifMutation.isPending}
+                        className="shrink-0 p-1 rounded-full text-slate-300 hover:text-slate-500 hover:bg-stone-100 transition-colors"
+                        title="Dismiss"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                          <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
+                        </svg>
+                      </button>
                     </li>
                   ))}
                 </ul>

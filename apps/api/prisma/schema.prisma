@@ -7,9 +7,154 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─────────────────────────────────────────────
-// Enums
-// ─────────────────────────────────────────────
+model User {
+  id                   String         @id @default(cuid())
+  passwordHash         String
+  role                 UserRole       @default(FAMILY_MEMBER)
+  status               MemberStatus   @default(ACTIVE)
+  refreshToken         String?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  nik                  String         @unique
+  referrerNik          String?
+  referrerRelationship String?
+  leaveRequests        LeaveRequest[]
+  personNodes          PersonNode[]
+
+  @@index([nik])
+}
+
+model FamilyGroup {
+  id            String         @id @default(cuid())
+  name          String
+  description   String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  invites       Invite[]
+  leaveRequests LeaveRequest[]
+  notifications Notification[]
+  members       PersonNode[]
+}
+
+model Notification {
+  id            String      @id @default(cuid())
+  familyGroupId String
+  type          String
+  message       String
+  personNodeId  String?
+  createdAt     DateTime    @default(now())
+  readAt        DateTime?
+  familyGroup   FamilyGroup @relation(fields: [familyGroupId], references: [id])
+
+  @@index([familyGroupId, createdAt])
+}
+
+model PersonNode {
+  id                    String             @id @default(cuid())
+  displayName           String
+  birthDate             DateTime?
+  birthPlace            String?
+  deathDate             DateTime?
+  bio                   String?
+  avatarUrl             String?
+  isDeceased            Boolean            @default(false)
+  isPlaceholder         Boolean            @default(false)
+  canvasX               Float              @default(0)
+  canvasY               Float              @default(0)
+  userId                String?
+  familyGroupId         String?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  gender                Gender?
+  surname               String?
+  pendingApproval       Boolean            @default(false)
+  role                  UserRole           @default(FAMILY_MEMBER)
+  familyGroup           FamilyGroup?       @relation(fields: [familyGroupId], references: [id])
+  user                  User?              @relation(fields: [userId], references: [id])
+  photos                PersonPhoto[]
+  relationshipsAsSource RelationshipEdge[] @relation("EdgeSource")
+  relationshipsAsTarget RelationshipEdge[] @relation("EdgeTarget")
+
+  @@unique([userId, familyGroupId])
+  @@index([familyGroupId])
+}
+
+model RelationshipEdge {
+  id               String           @id @default(cuid())
+  relationshipType RelationshipType
+  sourceId         String
+  targetId         String
+  marriageDate     DateTime?
+  divorceDate      DateTime?
+  notes            String?
+  createdAt        DateTime         @default(now())
+  source           PersonNode       @relation("EdgeSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  target           PersonNode       @relation("EdgeTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, targetId, relationshipType])
+  @@index([sourceId])
+  @@index([targetId])
+}
+
+model PersonPhoto {
+  id           String     @id @default(cuid())
+  url          String
+  caption      String?
+  takenAt      DateTime?
+  sortOrder    Int        @default(0)
+  personNodeId String
+  createdAt    DateTime   @default(now())
+  personNode   PersonNode @relation(fields: [personNodeId], references: [id], onDelete: Cascade)
+}
+
+model Invite {
+  id            String       @id @default(cuid())
+  code          String       @unique
+  status        InviteStatus @default(UNUSED)
+  expiresAt     DateTime
+  familyGroupId String
+  createdAt     DateTime     @default(now())
+  usedAt        DateTime?
+  familyGroup   FamilyGroup  @relation(fields: [familyGroupId], references: [id])
+}
+
+model LeaveRequest {
+  id            String             @id @default(cuid())
+  userId        String
+  familyGroupId String
+  status        LeaveRequestStatus @default(PENDING)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  expiresAt     DateTime?
+  familyGroup   FamilyGroup        @relation(fields: [familyGroupId], references: [id])
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, familyGroupId])
+  @@index([familyGroupId])
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  familyGroupId String
+  actorUserId   String
+  action        String
+  targetId      String?
+  details       String?
+  createdAt     DateTime @default(now())
+
+  @@index([familyGroupId, createdAt])
+}
+
+model ShareToken {
+  id              String   @id @default(cuid())
+  token           String   @unique
+  familyGroupId   String
+  createdByUserId String
+  expiresAt       DateTime
+  createdAt       DateTime @default(now())
+
+  @@index([token])
+}
 
 enum Gender {
   MALE
@@ -43,176 +188,4 @@ enum LeaveRequestStatus {
   PENDING
   APPROVED
   REJECTED
-}
-
-// ─────────────────────────────────────────────
-// Core Tables
-// ─────────────────────────────────────────────
-
-model User {
-  id           String       @id @default(cuid())
-  nik          String       @unique
-  passwordHash String
-  role         UserRole     @default(FAMILY_MEMBER)
-  status       MemberStatus @default(ACTIVE)
-  refreshToken         String?
-  referrerNik          String?
-  referrerRelationship String?
-
-  personNodes  PersonNode[]
-  leaveRequests LeaveRequest[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([nik])
-}
-
-model FamilyGroup {
-  id          String  @id @default(cuid())
-  name        String
-  description String?
-
-  members       PersonNode[]
-  invites       Invite[]
-  notifications Notification[]
-  leaveRequests LeaveRequest[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Notification {
-  id            String      @id @default(cuid())
-  familyGroupId String
-  familyGroup   FamilyGroup @relation(fields: [familyGroupId], references: [id])
-  type          String
-  message       String
-  personNodeId  String?
-  readAt        DateTime?
-
-  createdAt DateTime @default(now())
-
-  @@index([familyGroupId, createdAt])
-}
-
-model PersonNode {
-  id            String    @id @default(cuid())
-  displayName   String
-  gender        Gender?
-  surname       String?
-  birthDate     DateTime?
-  birthPlace    String?
-  deathDate     DateTime?
-  bio           String?
-  avatarUrl     String?
-  isDeceased    Boolean   @default(false)
-  isPlaceholder   Boolean   @default(false)
-  pendingApproval Boolean   @default(false)
-  role          UserRole  @default(FAMILY_MEMBER)
-
-  canvasX Float @default(0)
-  canvasY Float @default(0)
-
-  userId String?
-  user   User?   @relation(fields: [userId], references: [id])
-
-  familyGroupId String?
-  familyGroup   FamilyGroup? @relation(fields: [familyGroupId], references: [id])
-
-  photos PersonPhoto[]
-
-  relationshipsAsSource RelationshipEdge[] @relation("EdgeSource")
-  relationshipsAsTarget RelationshipEdge[] @relation("EdgeTarget")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([userId, familyGroupId])
-  @@index([familyGroupId])
-}
-
-model RelationshipEdge {
-  id               String           @id @default(cuid())
-  relationshipType RelationshipType
-
-  sourceId String
-  source   PersonNode @relation("EdgeSource", fields: [sourceId], references: [id], onDelete: Cascade)
-
-  targetId String
-  target   PersonNode @relation("EdgeTarget", fields: [targetId], references: [id], onDelete: Cascade)
-
-  marriageDate DateTime?
-  divorceDate  DateTime?
-  notes        String?
-
-  createdAt DateTime @default(now())
-
-  @@unique([sourceId, targetId, relationshipType])
-  @@index([sourceId])
-  @@index([targetId])
-}
-
-model PersonPhoto {
-  id        String    @id @default(cuid())
-  url       String
-  caption   String?
-  takenAt   DateTime?
-  sortOrder Int       @default(0)
-
-  personNodeId String
-  personNode   PersonNode @relation(fields: [personNodeId], references: [id], onDelete: Cascade)
-
-  createdAt DateTime @default(now())
-}
-
-model Invite {
-  id        String       @id @default(cuid())
-  code      String       @unique
-  status    InviteStatus @default(UNUSED)
-  expiresAt DateTime
-
-  familyGroupId String
-  familyGroup   FamilyGroup @relation(fields: [familyGroupId], references: [id])
-
-  createdAt DateTime  @default(now())
-  usedAt    DateTime?
-}
-
-model LeaveRequest {
-  id            String             @id @default(cuid())
-  userId        String
-  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  familyGroupId String
-  familyGroup   FamilyGroup        @relation(fields: [familyGroupId], references: [id])
-  status        LeaveRequestStatus @default(PENDING)
-  expiresAt     DateTime?
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-
-  @@unique([userId, familyGroupId])
-  @@index([familyGroupId])
-}
-
-model AuditLog {
-  id            String   @id @default(cuid())
-  familyGroupId String
-  actorUserId   String
-  action        String
-  targetId      String?
-  details       String?
-  createdAt     DateTime @default(now())
-
-  @@index([familyGroupId, createdAt])
-}
-
-model ShareToken {
-  id              String   @id @default(cuid())
-  token           String   @unique
-  familyGroupId   String
-  createdByUserId String
-  expiresAt       DateTime
-  createdAt       DateTime @default(now())
-
-  @@index([token])
 }

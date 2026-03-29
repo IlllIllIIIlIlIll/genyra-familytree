@@ -109,7 +109,10 @@ export const PersonNodeComponent = memo(function PersonNodeComponent({
           </span>
         )}
         {node.isPlaceholder && (
-          <span className={cn('absolute -top-1.5 -left-1.5 font-bold bg-slate-400 text-white px-1.5 py-0.5 rounded-full', FONT.NODE_BADGE)}>
+          <span
+            className={cn('absolute -top-1.5 -left-1.5 font-bold bg-slate-400 text-white px-1.5 py-0.5 rounded-full cursor-default', FONT.NODE_BADGE)}
+            title="Placeholder — no account linked. This person was added manually to preserve relationships."
+          >
             ?
           </span>
         )}
