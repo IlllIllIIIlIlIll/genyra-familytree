@@ -24,8 +24,8 @@ export default function ProfilePage() {
   const router        = useRouter()
   const personId      = params['person-id'] as string
   const familyGroupId = useAuthStore((s) => s.familyGroupId)
-  const authUserId    = useAuthStore((s) => s.userId)
-  const role          = useAuthStore((s) => s.role)
+  const currentNik    = useAuthStore((s) => s.nik)
+  const isAdmin       = useAuthStore((s) => s.isAdmin)
   const toast         = useToastStore((s) => s.toast)
   const queryClient   = useQueryClient()
   const [confirmLeave, setConfirmLeave] = useState(false)
@@ -121,9 +121,9 @@ export default function ProfilePage() {
     )
   }
 
-  const canEditPhotos = node.userId === authUserId || role === 'FAMILY_HEAD'
-  const isOwnProfile  = node.userId === authUserId
-  const isMember      = role !== 'FAMILY_HEAD'
+  const canEditPhotos = node.nikId === currentNik || isAdmin
+  const isOwnProfile  = node.nikId === currentNik
+  const isMember      = !isAdmin
 
   const birthYear = node.birthDate ? new Date(node.birthDate).getFullYear() : null
   const deathYear = node.deathDate ? new Date(node.deathDate).getFullYear() : null

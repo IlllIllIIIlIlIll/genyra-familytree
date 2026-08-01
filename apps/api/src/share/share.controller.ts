@@ -13,7 +13,7 @@ export class ShareController {
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Create a read-only share link (Family Head only)' })
+  @ApiOperation({ summary: 'Create a read-only share link (family admin only)' })
   async createToken(
     @CurrentUser() user: JwtPayload,
   ): Promise<{ token: string; expiresAt: string }> {

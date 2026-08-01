@@ -1,10 +1,10 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common'
+import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
 import { PersonNodesService } from './person-nodes.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator'
-import { CreatePersonNodeSchema, UpdatePersonNodeSchema, UpdateCanvasPositionSchema, AddChildSchema } from '@genyra/shared-types'
-import type { PersonNode, CreatePersonNodeDto, UpdatePersonNodeDto, UpdateCanvasPositionDto, AddChildDto } from '@genyra/shared-types'
+import { UpdatePersonNodeSchema, UpdateCanvasPositionSchema, AddChildSchema } from '@genyra/shared-types'
+import type { PersonNode, UpdatePersonNodeDto, UpdateCanvasPositionDto, AddChildDto } from '@genyra/shared-types'
 
 @ApiTags('person-nodes')
 @ApiBearerAuth()
@@ -13,19 +13,13 @@ import type { PersonNode, CreatePersonNodeDto, UpdatePersonNodeDto, UpdateCanvas
 export class PersonNodesController {
   constructor(private readonly personNodesService: PersonNodesService) {}
 
-  @Get('unlinked')
-  @ApiOperation({ summary: 'Get unlinked person nodes (no User account) — Family Head only' })
-  async findUnlinked(@CurrentUser() user: JwtPayload): Promise<PersonNode[]> {
-    return this.personNodesService.findUnlinked(user.sub)
-  }
-
   @Get('search')
   @ApiOperation({ summary: 'Search person nodes by name within the current family' })
   async search(
     @Query('q') q: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<PersonNode[]> {
-    return this.personNodesService.search(q ?? '', user.sub)
+    return this.personNodesService.search(q ?? '', user)
   }
 
   @Get(':id')
@@ -34,25 +28,15 @@ export class PersonNodesController {
     return this.personNodesService.findById(id)
   }
 
-  @Post()
-  @ApiOperation({ summary: 'Create a new person node (placeholder or linked user)' })
-  async create(
-    @Body() body: unknown,
-    @CurrentUser() user: JwtPayload,
-  ): Promise<PersonNode> {
-    const dto = CreatePersonNodeSchema.parse(body) satisfies CreatePersonNodeDto
-    return this.personNodesService.createForUser(dto, user.sub)
-  }
-
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a person node' })
+  @ApiOperation({ summary: 'Update your own person node' })
   async update(
     @Param('id') id: string,
     @Body() body: unknown,
     @CurrentUser() user: JwtPayload,
   ): Promise<PersonNode> {
     const dto = UpdatePersonNodeSchema.parse(body) satisfies UpdatePersonNodeDto
-    return this.personNodesService.update(id, dto, user.sub)
+    return this.personNodesService.update(id, dto, user)
   }
 
   @Patch(':id/canvas-position')
@@ -63,34 +47,16 @@ export class PersonNodesController {
     @CurrentUser() user: JwtPayload,
   ): Promise<PersonNode> {
     const dto = UpdateCanvasPositionSchema.parse(body) satisfies UpdateCanvasPositionDto
-    return this.personNodesService.updateCanvasPosition(id, dto, user.sub)
-  }
-
-  @Delete(':id')
-  @ApiOperation({ summary: 'Delete a person node (Family Head only)' })
-  async remove(
-    @Param('id') id: string,
-    @CurrentUser() user: JwtPayload,
-  ): Promise<void> {
-    return this.personNodesService.delete(id, user.sub)
+    return this.personNodesService.updateCanvasPosition(id, dto, user)
   }
 
   @Post('add-child')
-  @ApiOperation({ summary: 'Father adds a newborn child (requires SPOUSE relationship)' })
+  @ApiOperation({ summary: 'Add a newborn child (requires an existing SPOUSE relationship)' })
   async addChild(
     @Body() body: unknown,
     @CurrentUser() user: JwtPayload,
   ): Promise<PersonNode> {
     const dto = AddChildSchema.parse(body) satisfies AddChildDto
-    return this.personNodesService.addChild(dto, user.sub)
-  }
-
-  @Patch(':id/approve')
-  @ApiOperation({ summary: 'Approve a pending person node (Family Head only)' })
-  async approve(
-    @Param('id') id: string,
-    @CurrentUser() user: JwtPayload,
-  ): Promise<PersonNode> {
-    return this.personNodesService.approve(id, user.sub)
+    return this.personNodesService.addChild(dto, user)
   }
 }

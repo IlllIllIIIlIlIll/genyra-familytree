@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AdminBadgeSchema = exports.NotificationSchema = exports.AuthTokensSchema = exports.MapDataSchema = exports.ValidateInviteSchema = exports.InviteSchema = exports.InviteStatusSchema = exports.CreateFamilyGroupSchema = exports.FamilyGroupSchema = void 0;
+exports.FamilySummarySchema = exports.LeaveRequestSchema = exports.NotificationSchema = exports.AuthTokensSchema = exports.MapDataSchema = exports.CreateAdminFamilyGroupSchema = exports.FamilyGroupSchema = void 0;
 const zod_1 = require("zod");
 const person_node_types_1 = require("./person-node.types");
 const relationship_types_1 = require("./relationship.types");
@@ -8,23 +8,12 @@ exports.FamilyGroupSchema = zod_1.z.object({
     id: zod_1.z.string(),
     name: zod_1.z.string(),
     description: zod_1.z.string().nullable(),
+    adminAccountId: zod_1.z.string(),
     createdAt: zod_1.z.string().datetime(),
 });
-exports.CreateFamilyGroupSchema = zod_1.z.object({
+exports.CreateAdminFamilyGroupSchema = zod_1.z.object({
     name: zod_1.z.string().min(1).max(100),
     description: zod_1.z.string().max(500).optional(),
-});
-exports.InviteStatusSchema = zod_1.z.enum(['UNUSED', 'USED', 'EXPIRED']);
-exports.InviteSchema = zod_1.z.object({
-    id: zod_1.z.string(),
-    code: zod_1.z.string(),
-    status: exports.InviteStatusSchema,
-    expiresAt: zod_1.z.string().datetime(),
-    familyGroupId: zod_1.z.string(),
-    createdAt: zod_1.z.string().datetime(),
-});
-exports.ValidateInviteSchema = zod_1.z.object({
-    code: zod_1.z.string().min(1),
 });
 exports.MapDataSchema = zod_1.z.object({
     familyName: zod_1.z.string(),
@@ -41,10 +30,19 @@ exports.NotificationSchema = zod_1.z.object({
     type: zod_1.z.string(),
     message: zod_1.z.string(),
     personNodeId: zod_1.z.string().nullable(),
+    readAt: zod_1.z.string().datetime().nullable().optional(),
     createdAt: zod_1.z.string().datetime(),
 });
-exports.AdminBadgeSchema = zod_1.z.object({
-    pendingCount: zod_1.z.number(),
-    inviteExpired: zod_1.z.boolean(),
+exports.LeaveRequestSchema = zod_1.z.object({
+    id: zod_1.z.string(),
+    nik: zod_1.z.string(),
+    displayName: zod_1.z.string(),
+    familyGroupId: zod_1.z.string(),
+    status: zod_1.z.enum(['PENDING', 'APPROVED', 'REJECTED']),
+    createdAt: zod_1.z.string().datetime(),
+});
+exports.FamilySummarySchema = zod_1.z.object({
+    id: zod_1.z.string(),
+    name: zod_1.z.string(),
 });
 //# sourceMappingURL=api-response.types.js.map

@@ -14,10 +14,9 @@ export const PersonNodeSchema = z.object({
   avatarUrl: z.string().nullable(),
   isDeceased: z.boolean(),
   isPlaceholder: z.boolean(),
-  pendingApproval: z.boolean(),
   canvasX: z.number(),
   canvasY: z.number(),
-  userId: z.string().nullable(),
+  nikId: z.string().nullable(),
   familyGroupId: z.string().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -36,10 +35,9 @@ export const CreatePersonNodeSchema = z.object({
   avatarUrl: z.string().optional().nullable(),
   isDeceased: z.boolean().optional().default(false),
   isPlaceholder: z.boolean().optional().default(false),
-  pendingApproval: z.boolean().optional().default(false),
   canvasX: z.number().optional().default(0),
   canvasY: z.number().optional().default(0),
-  userId: z.string().optional(),
+  nikId: z.string().optional(),
 })
 export type CreatePersonNodeDto = z.infer<typeof CreatePersonNodeSchema>
 

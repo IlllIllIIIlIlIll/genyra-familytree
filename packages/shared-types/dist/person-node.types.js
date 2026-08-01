@@ -16,10 +16,9 @@ exports.PersonNodeSchema = zod_1.z.object({
     avatarUrl: zod_1.z.string().nullable(),
     isDeceased: zod_1.z.boolean(),
     isPlaceholder: zod_1.z.boolean(),
-    pendingApproval: zod_1.z.boolean(),
     canvasX: zod_1.z.number(),
     canvasY: zod_1.z.number(),
-    userId: zod_1.z.string().nullable(),
+    nikId: zod_1.z.string().nullable(),
     familyGroupId: zod_1.z.string().nullable(),
     createdAt: zod_1.z.string().datetime(),
     updatedAt: zod_1.z.string().datetime(),
@@ -35,10 +34,9 @@ exports.CreatePersonNodeSchema = zod_1.z.object({
     avatarUrl: zod_1.z.string().optional().nullable(),
     isDeceased: zod_1.z.boolean().optional().default(false),
     isPlaceholder: zod_1.z.boolean().optional().default(false),
-    pendingApproval: zod_1.z.boolean().optional().default(false),
     canvasX: zod_1.z.number().optional().default(0),
     canvasY: zod_1.z.number().optional().default(0),
-    userId: zod_1.z.string().optional(),
+    nikId: zod_1.z.string().optional(),
 });
 exports.UpdatePersonNodeSchema = exports.CreatePersonNodeSchema.partial();
 exports.UpdateCanvasPositionSchema = zod_1.z.object({
@@ -64,7 +62,7 @@ exports.AddChildSchema = zod_1.z.object({
     displayName: zod_1.z.string().min(1, 'Full name is required').max(100),
     gender: user_types_1.GenderSchema.optional(),
     surname: zod_1.z.string().min(1, 'Nickname is required').max(50).regex(/^\S+$/, 'Nickname must be a single word'),
-    nik: zod_1.z.string().length(16, 'NIK must be exactly 16 digits').regex(/^\d{16}$/, 'NIK must be exactly 16 digits'),
+    nik: zod_1.z.string().length(16, 'NIK must be exactly 16 digits').regex(/^\d{16}$/, 'NIK must be exactly 16 digits').optional(),
     birthDate: zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Please enter a valid date'),
     birthPlace: zod_1.z.string().min(1, 'Place of birth is required').max(100),
 });

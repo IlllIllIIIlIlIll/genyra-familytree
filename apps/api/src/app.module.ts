@@ -8,8 +8,7 @@ import { AuthModule } from './auth/auth.module'
 import { UsersModule } from './users/users.module'
 import { FamilyGroupsModule } from './family-groups/family-groups.module'
 import { PersonNodesModule } from './person-nodes/person-nodes.module'
-import { RelationshipsModule } from './relationships/relationships.module'
-import { InvitesModule } from './invites/invites.module'
+import { AdminModule } from './admin/admin.module'
 import { PersonPhotosModule } from './person-photos/person-photos.module'
 import { NotificationsModule } from './notifications/notifications.module'
 import { AuditModule } from './audit/audit.module'
@@ -30,8 +29,7 @@ import { TasksModule } from './tasks/tasks.module'
     UsersModule,
     FamilyGroupsModule,
     PersonNodesModule,
-    RelationshipsModule,
-    InvitesModule,
+    AdminModule,
     PersonPhotosModule,
     NotificationsModule,
     AuditModule,

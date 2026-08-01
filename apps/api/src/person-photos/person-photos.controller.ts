@@ -49,7 +49,7 @@ export class PersonPhotosController {
       url:     dataUrl,
       caption: caption ?? null,
       takenAt: takenAt ?? null,
-    }, user.sub)
+    }, user)
   }
 
   @Delete('person-photos/:id')
@@ -58,6 +58,6 @@ export class PersonPhotosController {
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<void> {
-    return this.photosService.delete(id, user.sub)
+    return this.photosService.delete(id, user)
   }
 }

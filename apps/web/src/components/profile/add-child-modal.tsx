@@ -17,8 +17,6 @@ interface Props {
 export function AddChildModal({ onClose }: Props) {
   const toast         = useToastStore((s) => s.toast)
   const familyGroupId = useAuthStore((s) => s.familyGroupId)
-  const role          = useAuthStore((s) => s.role)
-  const isFamilyHead  = role === 'FAMILY_HEAD'
   const queryClient   = useQueryClient()
 
   const { register, handleSubmit, control, formState: { errors, isSubmitting } } = useForm<AddChildDto>({
@@ -29,7 +27,7 @@ export function AddChildModal({ onClose }: Props) {
     mutationFn: (values: AddChildDto) => apiClient.addChild(values),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['map-data', familyGroupId] })
-      toast(isFamilyHead ? 'Child added to the family tree' : 'Child submitted — awaiting family head approval', 'success')
+      toast('Child added to the family tree', 'success')
       onClose()
     },
     onError: (err: unknown) => {
@@ -46,9 +44,8 @@ export function AddChildModal({ onClose }: Props) {
       >
         <h2 className="text-base font-semibold text-slate-800">Add newborn child</h2>
         <p className="text-xs text-slate-400">
-          {isFamilyHead
-            ? 'The child will appear on the family map immediately. They can log in using their NIK and your password.'
-            : 'A family head will need to approve this before it appears on the map. The child will be able to log in using their NIK and your password.'}
+          The child will appear on the family map immediately. Your family admin can link a
+          Google account to their NIK later so they can sign in.
         </p>
 
         <form onSubmit={(e) => void handleSubmit((v) => mutation.mutate(v))(e)} className="space-y-4">

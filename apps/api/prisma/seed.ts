@@ -1,7 +1,8 @@
 import { PrismaClient } from '@prisma/client'
-import * as argon2 from 'argon2'
 
 const prisma = new PrismaClient()
+
+const ADMIN_EMAIL = process.env['SEED_ADMIN_EMAIL'] ?? 'favbalhan@gmail.com'
 
 async function main() {
   console.log('🌱 Seeding database...')
@@ -10,17 +11,24 @@ async function main() {
   await prisma.personPhoto.deleteMany()
   await prisma.leaveRequest.deleteMany()
   await prisma.personNode.deleteMany()
-  await prisma.invite.deleteMany()
   await prisma.notification.deleteMany()
-  await prisma.user.deleteMany()
+  await prisma.nikLink.deleteMany()
+  await prisma.nikIdentity.deleteMany()
   await prisma.familyGroup.deleteMany()
+  await prisma.account.deleteMany()
 
   console.log('✓ Cleared existing data')
 
-  const passwordHash = await argon2.hash('password123')
+  const admin = await prisma.account.create({
+    data: { email: ADMIN_EMAIL, isAdmin: true },
+  })
 
   const familyGroup = await prisma.familyGroup.create({
-    data: { name: 'Keluarga Besar Sadikin', description: 'Extended family of Aminah & Muniáh' },
+    data: {
+      name:        'Keluarga Besar Sadikin',
+      description: 'Extended family of Aminah & Muniáh',
+      adminAccountId: admin.id,
+    },
   })
   const g = familyGroup.id
 
@@ -30,7 +38,6 @@ async function main() {
   const nextNik = () => String(++nikCounter).padStart(16, '0')
 
   const member = async (opts: {
-    role?:        'FAMILY_HEAD' | 'FAMILY_MEMBER'
     displayName:  string
     gender:       'MALE' | 'FEMALE'
     surname?:     string
@@ -39,29 +46,21 @@ async function main() {
     isDeceased?:  boolean
     deathDate?:   Date
   }) => {
-    const u = await prisma.user.create({
+    const nik = nextNik()
+    await prisma.nikIdentity.create({ data: { nik, status: 'ACTIVE' } })
+    return prisma.personNode.create({
       data: {
-        nik:          nextNik(),
-        passwordHash,
-        role:         opts.role ?? 'FAMILY_MEMBER',
-        status:       'ACTIVE',
-        personNodes: {
-          create: {
-            displayName:   opts.displayName,
-            gender:        opts.gender,
-            surname:       opts.surname ?? null,
-            birthDate:     opts.birthDate,
-            birthPlace:    opts.birthPlace,
-            isDeceased:    opts.isDeceased ?? false,
-            deathDate:     opts.deathDate ?? null,
-            familyGroupId: g,
-            role:          opts.role ?? 'FAMILY_MEMBER',
-          },
-        },
+        nikId:         nik,
+        displayName:   opts.displayName,
+        gender:        opts.gender,
+        surname:       opts.surname ?? null,
+        birthDate:     opts.birthDate,
+        birthPlace:    opts.birthPlace,
+        isDeceased:    opts.isDeceased ?? false,
+        deathDate:     opts.deathDate ?? null,
+        familyGroupId: g,
       },
-      include: { personNodes: true },
     })
-    return u.personNodes[0]!
   }
 
   const rel = (
@@ -224,7 +223,6 @@ async function main() {
   // Children of Emin + Yono
   // NIK 0000000000000023
   const andi = await member({
-    role: 'FAMILY_HEAD',
     displayName: 'Andi Budiono', surname: 'Endis',
     gender: 'MALE',   birthDate: new Date('1972-03-07'), birthPlace: 'Bandung',
   })
@@ -503,8 +501,8 @@ async function main() {
   console.log('  Gen 5 : Rayyan | Arsa')
   console.log('')
   console.log('  49 family members, all NIKs are sequential dummies (0000000000000001…)')
-  console.log('  All passwords: password123')
-  console.log('  Family Head: Andi Budiono — NIK 0000000000000023')
+  console.log('  None of them have a linked Google account yet — link real emails via the admin interface.')
+  console.log(`  Admin account: ${ADMIN_EMAIL} (owns Keluarga Besar Sadikin, sign in with Google to access /admin)`)
 }
 
 main()

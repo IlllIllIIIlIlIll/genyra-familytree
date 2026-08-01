@@ -10,13 +10,10 @@ function generateShareToken(): string {
 export class ShareService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createToken(requestingUserId: string): Promise<{ token: string; expiresAt: string }> {
-    const headNode = await this.prisma.personNode.findFirst({
-      where: { userId: requestingUserId, role: 'FAMILY_HEAD', familyGroupId: { not: null } },
-      select: { familyGroupId: true },
-    })
-    if (!headNode?.familyGroupId) {
-      throw new ForbiddenException('Only Family Head can create share links')
+  async createToken(accountId: string): Promise<{ token: string; expiresAt: string }> {
+    const group = await this.prisma.familyGroup.findUnique({ where: { adminAccountId: accountId } })
+    if (!group) {
+      throw new ForbiddenException('Only the family admin can create share links')
     }
 
     const token     = generateShareToken()
@@ -25,8 +22,8 @@ export class ShareService {
     await this.prisma.shareToken.create({
       data: {
         token,
-        familyGroupId:   headNode.familyGroupId,
-        createdByUserId: requestingUserId,
+        familyGroupId:      group.id,
+        createdByAccountId: accountId,
         expiresAt,
       },
     })
@@ -51,7 +48,7 @@ export class ShareService {
 
     const [nodes, edges] = await Promise.all([
       this.prisma.personNode.findMany({
-        where: { familyGroupId: record.familyGroupId, pendingApproval: false },
+        where: { familyGroupId: record.familyGroupId },
         select: {
           id: true, displayName: true, gender: true, surname: true,
           birthDate: true, deathDate: true, isDeceased: true,

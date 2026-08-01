@@ -2,8 +2,6 @@ import axios, { type AxiosInstance } from 'axios'
 import { getAccessToken, saveTokens, clearTokens, getRefreshToken } from './auth'
 import type {
   AuthTokens,
-  LoginDto,
-  RegisterDto,
   PersonNode,
   CreatePersonNodeDto,
   UpdatePersonNodeDto,
@@ -11,19 +9,18 @@ import type {
   RelationshipEdge,
   CreateRelationshipDto,
   FamilyGroup,
-  CreateFamilyGroupDto,
-  CreateFamilyWithParentsDto,
-  JoinGroupDto,
+  CreateAdminFamilyGroupDto,
+  CreateNikIdentityDto,
+  LinkAccountDto,
   MapData,
-  Invite,
   User,
   MemberStatus,
   PersonPhoto,
   AddChildDto,
   Notification,
-  AdminBadge,
   LeaveRequest,
   FamilySummary,
+  GoogleExchangeResponse,
 } from '@genyra/shared-types'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'
@@ -73,15 +70,31 @@ function createAxiosInstance(): AxiosInstance {
 
 const http = createAxiosInstance()
 
+// AdminMember mirrors apps/api/src/admin/admin.service.ts's AdminMember —
+// not part of @genyra/shared-types since it's an admin-only response shape.
+export interface AdminMember {
+  node: PersonNode
+  nik: string | null
+  status: MemberStatus | null
+  linkedAccounts: Array<{ id: string; email: string; hasLoggedIn: boolean }>
+}
+
 export const apiClient = {
-  // Auth
-  login: async (dto: LoginDto): Promise<AuthTokens> => {
-    const { data } = await http.post<AuthTokens>('/auth/login', dto)
+  // ── Auth (Google OAuth) ────────────────────────────────────────────────────
+  googleLoginUrl: (): string => `${API_URL}/auth/google`,
+
+  exchangeGoogleCode: async (code: string): Promise<GoogleExchangeResponse> => {
+    const { data } = await http.post<GoogleExchangeResponse>('/auth/exchange', { code })
     return data
   },
 
-  register: async (dto: RegisterDto): Promise<{ message: string }> => {
-    const { data } = await http.post<{ message: string }>('/auth/register', dto)
+  selectAdmin: async (sessionToken: string): Promise<AuthTokens> => {
+    const { data } = await http.post<AuthTokens>('/auth/select-admin', { sessionToken })
+    return data
+  },
+
+  selectNik: async (sessionToken: string, nik: string, familyGroupId: string): Promise<AuthTokens> => {
+    const { data } = await http.post<AuthTokens>('/auth/select-nik', { sessionToken, nik, familyGroupId })
     return data
   },
 
@@ -90,49 +103,13 @@ export const apiClient = {
     clearTokens()
   },
 
-  // Users
+  // ── Users (personal session) ───────────────────────────────────────────────
   getMe: async (): Promise<User> => {
     const { data } = await http.get<User>('/users/me')
     return data
   },
 
-  getPendingUsers: async (): Promise<User[]> => {
-    const me = await apiClient.getMe()
-    if (!me.familyGroupId) return []
-    const { data } = await http.get<User[]>(`/users?familyGroupId=${me.familyGroupId}&status=PENDING_APPROVAL`)
-    return data
-  },
-
-  getFamilyMembers: async (): Promise<User[]> => {
-    const { data } = await http.get<User[]>('/users/members')
-    return data
-  },
-
-  deleteUser: async (userId: string, headPassword: string): Promise<void> => {
-    await http.delete(`/users/${userId}`, { data: { headPassword } })
-  },
-
-  updateUserStatus: async (userId: string, status: MemberStatus): Promise<User> => {
-    const { data } = await http.patch<User>(`/users/${userId}/status`, { status })
-    return data
-  },
-
-  // Family Groups
-  createFamilyGroup: async (dto: CreateFamilyGroupDto): Promise<FamilyGroup> => {
-    const { data } = await http.post<FamilyGroup>('/family-groups', dto)
-    return data
-  },
-
-  createFamilyWithParents: async (dto: CreateFamilyWithParentsDto): Promise<FamilyGroup> => {
-    const { data } = await http.post<FamilyGroup>('/family-groups/create-family', dto)
-    return data
-  },
-
-  joinFamilyGroup: async (dto: JoinGroupDto): Promise<{ message: string }> => {
-    const { data } = await http.post<{ message: string }>('/family-groups/join', dto)
-    return data
-  },
-
+  // ── Family Groups ──────────────────────────────────────────────────────────
   getFamilyGroup: async (id: string): Promise<FamilyGroup> => {
     const { data } = await http.get<FamilyGroup>(`/family-groups/${id}`)
     return data
@@ -143,14 +120,9 @@ export const apiClient = {
     return data
   },
 
-  // Person Nodes
+  // ── Person Nodes (self-service) ────────────────────────────────────────────
   getPersonNode: async (id: string): Promise<PersonNode> => {
     const { data } = await http.get<PersonNode>(`/person-nodes/${id}`)
-    return data
-  },
-
-  createPersonNode: async (dto: CreatePersonNodeDto): Promise<PersonNode> => {
-    const { data } = await http.post<PersonNode>('/person-nodes', dto)
     return data
   },
 
@@ -164,11 +136,19 @@ export const apiClient = {
     return data
   },
 
-  deletePersonNode: async (id: string): Promise<void> => {
-    await http.delete(`/person-nodes/${id}`)
+  // Search persons in current family
+  searchPersons: async (q: string): Promise<PersonNode[]> => {
+    const { data } = await http.get<PersonNode[]>(`/person-nodes/search?q=${encodeURIComponent(q)}`)
+    return data
   },
 
-  // Person Photos — images stored as base64 data URLs directly in the DB
+  // Add a child (requires spouse relationship on server side)
+  addChild: async (dto: AddChildDto): Promise<PersonNode> => {
+    const { data } = await http.post<PersonNode>('/person-nodes/add-child', dto)
+    return data
+  },
+
+  // ── Person Photos — images stored as base64 data URLs directly in the DB ────
   getPersonPhotos: async (personNodeId: string): Promise<PersonPhoto[]> => {
     const { data } = await http.get<PersonPhoto[]>(`/person-nodes/${personNodeId}/photos`)
     return data
@@ -193,87 +173,21 @@ export const apiClient = {
     await http.delete(`/person-photos/${id}`)
   },
 
-  // Relationships
-  createRelationship: async (dto: CreateRelationshipDto): Promise<RelationshipEdge> => {
-    const { data } = await http.post<RelationshipEdge>('/relationships', dto)
-    return data
-  },
-
-  deleteRelationship: async (id: string): Promise<void> => {
-    await http.delete(`/relationships/${id}`)
-  },
-
-  // Invites
-  generateInvite: async (): Promise<Invite> => {
-    const { data } = await http.post<Invite>('/invites/generate')
-    return data
-  },
-
-  validateInvite: async (code: string): Promise<{ valid: boolean; familyGroupId?: string }> => {
-    const { data } = await http.post<{ valid: boolean; familyGroupId?: string }>('/invites/validate', { code })
-    return data
-  },
-
-  listInvites: async (groupId: string): Promise<Invite[]> => {
-    const { data } = await http.get<Invite[]>(`/invites/group/${groupId}`)
-    return data
-  },
-
-  // Add a child (requires spouse relationship on server side)
-  addChild: async (dto: AddChildDto): Promise<PersonNode> => {
-    const { data } = await http.post<PersonNode>('/person-nodes/add-child', dto)
-    return data
-  },
-
-  // Approve a pending person node (Family Head only)
-  approvePersonNode: async (id: string): Promise<PersonNode> => {
-    const { data } = await http.patch<PersonNode>(`/person-nodes/${id}/approve`)
-    return data
-  },
-
-  // Get pending person nodes for current family group (Family Head only)
-  getPendingNodes: async (): Promise<PersonNode[]> => {
-    const { data } = await http.get<PersonNode[]>('/users/pending-nodes')
-    return data
-  },
-
-  // Get person nodes with no linked User account (Family Head only)
-  getUnlinkedNodes: async (): Promise<PersonNode[]> => {
-    const { data } = await http.get<PersonNode[]>('/person-nodes/unlinked')
-    return data
-  },
-
-  // Invite — single family invite (get or create)
-  getFamilyInvite: async (): Promise<Invite> => {
-    const { data } = await http.get<Invite>('/invites/my-family')
-    return data
-  },
-
-  // Refresh the family invite code
-  refreshFamilyInvite: async (): Promise<Invite> => {
-    const { data } = await http.patch<Invite>('/invites/my-family/refresh')
-    return data
-  },
-
-  // Update family name (Family Head only)
-  updateFamilyName: async (familyGroupId: string, name: string): Promise<FamilyGroup> => {
-    const { data } = await http.patch<FamilyGroup>(`/family-groups/${familyGroupId}/name`, { name })
-    return data
-  },
-
-  // Notifications
+  // ── Notifications ───────────────────────────────────────────────────────────
   getNotifications: async (): Promise<Notification[]> => {
     const { data } = await http.get<Notification[]>('/notifications/my-family')
     return data
   },
 
-  // Admin badge: pending count + invite expired status (Family Head only)
-  getAdminBadge: async (): Promise<AdminBadge> => {
-    const { data } = await http.get<AdminBadge>('/users/pending-count')
-    return data
+  markNotificationRead: async (id: string): Promise<void> => {
+    await http.patch(`/notifications/${id}/read`)
   },
 
-  // Multi-family
+  dismissNotification: async (id: string): Promise<void> => {
+    await http.delete(`/notifications/${id}`)
+  },
+
+  // ── Multi-family (personal session) ─────────────────────────────────────────
   getMyFamilies: async (): Promise<FamilySummary[]> => {
     const { data } = await http.get<FamilySummary[]>('/auth/my-families')
     return data
@@ -290,64 +204,13 @@ export const apiClient = {
     return data
   },
 
-  // Leave requests (admin only)
-  getLeaveRequests: async (familyGroupId: string): Promise<LeaveRequest[]> => {
-    const { data } = await http.get<LeaveRequest[]>(`/family-groups/${familyGroupId}/leave-requests`)
-    return data
-  },
-
-  processLeaveRequest: async (familyGroupId: string, requestId: string, approve: boolean): Promise<{ message: string }> => {
-    const { data } = await http.patch<{ message: string }>(`/family-groups/${familyGroupId}/leave-requests/${requestId}`, { approve })
-    return data
-  },
-
-  // Transfer family head ownership
-  transferOwnership: async (familyGroupId: string, newHeadUserId: string): Promise<{ message: string }> => {
-    const { data } = await http.post<{ message: string }>(`/family-groups/${familyGroupId}/transfer-ownership`, { newHeadUserId })
-    return data
-  },
-
-  // Delete entire family (head only, last member)
-  deleteFamily: async (familyGroupId: string): Promise<{ message: string }> => {
-    const { data } = await http.delete<{ message: string }>(`/family-groups/${familyGroupId}`)
-    return data
-  },
-
-  // Join an additional family (user already in another family)
-  joinAdditionalFamily: async (inviteCode: string): Promise<{ message: string }> => {
-    const { data } = await http.post<{ message: string }>('/family-groups/join-additional', { inviteCode })
-    return data
-  },
-
-  // Admin NIK update
-  adminUpdateNik: async (userId: string, nik: string): Promise<User> => {
-    const { data } = await http.patch<User>(`/users/${userId}/nik`, { nik })
-    return data
-  },
-
-  // Search persons in current family
-  searchPersons: async (q: string): Promise<PersonNode[]> => {
-    const { data } = await http.get<PersonNode[]>(`/person-nodes/search?q=${encodeURIComponent(q)}`)
-    return data
-  },
-
   // Cancel own leave request
   cancelLeaveRequest: async (familyGroupId: string): Promise<{ message: string }> => {
     const { data } = await http.delete<{ message: string }>(`/family-groups/${familyGroupId}/leave`)
     return data
   },
 
-  // Mark notification as read
-  markNotificationRead: async (id: string): Promise<void> => {
-    await http.patch(`/notifications/${id}/read`)
-  },
-
-  // Dismiss (delete) a notification
-  dismissNotification: async (id: string): Promise<void> => {
-    await http.delete(`/notifications/${id}`)
-  },
-
-  // Share token
+  // ── Share token ──────────────────────────────────────────────────────────────
   createShareToken: async (): Promise<{ token: string; expiresAt: string }> => {
     const { data } = await http.post<{ token: string; expiresAt: string }>('/share/token')
     return data
@@ -356,5 +219,86 @@ export const apiClient = {
   getPublicMapData: async (token: string): Promise<{ familyName: string; nodes: PersonNode[]; edges: RelationshipEdge[] }> => {
     const { data } = await http.get<{ familyName: string; nodes: PersonNode[]; edges: RelationshipEdge[] }>(`/share/${token}`)
     return data
+  },
+
+  // ── Admin (isAdmin-only) ─────────────────────────────────────────────────────
+  admin: {
+    getFamily: async (): Promise<FamilyGroup> => {
+      const { data } = await http.get<FamilyGroup>('/admin/family')
+      return data
+    },
+
+    createFamily: async (dto: CreateAdminFamilyGroupDto): Promise<FamilyGroup> => {
+      const { data } = await http.post<FamilyGroup>('/admin/family', dto)
+      return data
+    },
+
+    updateFamily: async (name: string): Promise<FamilyGroup> => {
+      const { data } = await http.patch<FamilyGroup>('/admin/family', { name })
+      return data
+    },
+
+    deleteFamily: async (): Promise<{ message: string }> => {
+      const { data } = await http.delete<{ message: string }>('/admin/family')
+      return data
+    },
+
+    listMembers: async (): Promise<AdminMember[]> => {
+      const { data } = await http.get<AdminMember[]>('/admin/members')
+      return data
+    },
+
+    createNikIdentity: async (dto: CreateNikIdentityDto): Promise<PersonNode> => {
+      const { data } = await http.post<PersonNode>('/admin/nik-identities', dto)
+      return data
+    },
+
+    setNikStatus: async (nik: string, status: MemberStatus): Promise<{ message: string }> => {
+      const { data } = await http.patch<{ message: string }>(`/admin/nik-identities/${nik}/status`, { status })
+      return data
+    },
+
+    linkAccount: async (nik: string, dto: LinkAccountDto): Promise<{ message: string }> => {
+      const { data } = await http.post<{ message: string }>(`/admin/nik-identities/${nik}/link-account`, dto)
+      return data
+    },
+
+    unlinkAccount: async (nik: string, accountId: string): Promise<{ message: string }> => {
+      const { data } = await http.delete<{ message: string }>(`/admin/nik-identities/${nik}/link-account/${accountId}`)
+      return data
+    },
+
+    createPersonNode: async (dto: CreatePersonNodeDto): Promise<PersonNode> => {
+      const { data } = await http.post<PersonNode>('/admin/person-nodes', dto)
+      return data
+    },
+
+    updatePersonNode: async (id: string, dto: UpdatePersonNodeDto): Promise<PersonNode> => {
+      const { data } = await http.patch<PersonNode>(`/admin/person-nodes/${id}`, dto)
+      return data
+    },
+
+    deletePersonNode: async (id: string): Promise<void> => {
+      await http.delete(`/admin/person-nodes/${id}`)
+    },
+
+    createRelationship: async (dto: CreateRelationshipDto): Promise<RelationshipEdge> => {
+      const { data } = await http.post<RelationshipEdge>('/admin/relationships', dto)
+      return data
+    },
+
+    deleteRelationship: async (id: string): Promise<void> => {
+      await http.delete(`/admin/relationships/${id}`)
+    },
+
+    getLeaveRequests: async (): Promise<LeaveRequest[]> => {
+      const { data } = await http.get<LeaveRequest[]>('/admin/leave-requests')
+      return data
+    },
+
+    processLeaveRequest: async (requestId: string, approve: boolean): Promise<{ message: string }> => {
+      const { data } = await http.patch<{ message: string }>(`/admin/leave-requests/${requestId}`, { approve })
+      return data
+    },
   },
 }

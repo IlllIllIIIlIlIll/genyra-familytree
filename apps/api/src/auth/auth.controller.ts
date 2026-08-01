@@ -1,33 +1,74 @@
-import { Controller, Post, Get, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common'
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
-import { Throttle, SkipThrottle } from '@nestjs/throttler'
-import { AuthService } from './auth.service'
+import { Controller, Get, Post, Body, UseGuards, HttpCode, HttpStatus, Res } from '@nestjs/common'
+import { AuthGuard } from '@nestjs/passport'
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiExcludeEndpoint } from '@nestjs/swagger'
+import { SkipThrottle } from '@nestjs/throttler'
+import type { FastifyReply } from 'fastify'
+import { z } from 'zod'
+import { AuthService, type ExchangeResult } from './auth.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
 import { CurrentUser, type JwtPayload } from '../common/decorators/current-user.decorator'
-import { z } from 'zod'
-import { RegisterSchema, LoginSchema } from '@genyra/shared-types'
-import type { RegisterDto, LoginDto, AuthTokens } from '@genyra/shared-types'
+import type { GoogleProfile } from './strategies/google.strategy'
+import type { AuthTokens } from '@genyra/shared-types'
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @Post('register')
-  @Throttle({ long: { ttl: 900_000, limit: 10 } })
-  @ApiOperation({ summary: 'Register with an invite code' })
-  async register(@Body() body: unknown): Promise<{ message: string }> {
-    const dto = RegisterSchema.parse(body) satisfies RegisterDto
-    return this.authService.register(dto)
+  @Get('google')
+  @ApiExcludeEndpoint()
+  googleLogin(@Res() reply: FastifyReply): void {
+    // Built manually (not via AuthGuard('google')) because passport-oauth2's
+    // redirect step calls res.setHeader, which Fastify's reply object doesn't
+    // implement — it only exists on Node's raw http.ServerResponse/Express res.
+    const clientID = process.env['GOOGLE_CLIENT_ID']
+    const callbackURL = process.env['GOOGLE_CALLBACK_URL']
+    if (!clientID || !callbackURL) throw new Error('GOOGLE_CLIENT_ID / GOOGLE_CALLBACK_URL not configured')
+
+    const url = new URL('https://accounts.google.com/o/oauth2/v2/auth')
+    url.searchParams.set('client_id', clientID)
+    url.searchParams.set('redirect_uri', callbackURL)
+    url.searchParams.set('response_type', 'code')
+    url.searchParams.set('scope', 'email profile')
+    reply.redirect(url.toString(), 302)
   }
 
-  @Post('login')
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  @ApiExcludeEndpoint()
+  async googleCallback(
+    @CurrentUser() profile: unknown,
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    const code = await this.authService.handleGoogleLogin(profile as GoogleProfile)
+    const frontendUrl = process.env['FRONTEND_URL'] ?? 'http://localhost:3000'
+    reply.redirect(`${frontendUrl}/auth/callback?code=${encodeURIComponent(code)}`, 302)
+  }
+
+  @Post('exchange')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ long: { ttl: 900_000, limit: 10 } })
-  @ApiOperation({ summary: 'Login and receive tokens' })
-  async login(@Body() body: unknown): Promise<AuthTokens> {
-    const dto = LoginSchema.parse(body) satisfies LoginDto
-    return this.authService.login(dto)
+  @ApiOperation({ summary: 'Exchange a Google-login code for the account-selection persona list' })
+  async exchange(@Body() body: unknown): Promise<ExchangeResult> {
+    const { code } = z.object({ code: z.string().min(1) }).parse(body)
+    return this.authService.exchange(code)
+  }
+
+  @Post('select-admin')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Finalize an admin session' })
+  async selectAdmin(@Body() body: unknown): Promise<AuthTokens> {
+    const { sessionToken } = z.object({ sessionToken: z.string().min(1) }).parse(body)
+    return this.authService.selectAdmin(sessionToken)
+  }
+
+  @Post('select-nik')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Finalize a personal session for a chosen NIK + family' })
+  async selectNik(@Body() body: unknown): Promise<AuthTokens> {
+    const { sessionToken, nik, familyGroupId } = z
+      .object({ sessionToken: z.string().min(1), nik: z.string().min(1), familyGroupId: z.string().min(1) })
+      .parse(body)
+    return this.authService.selectNik(sessionToken, nik, familyGroupId)
   }
 
   @Post('refresh')
@@ -40,7 +81,7 @@ export class AuthController {
     @Body() body: unknown,
   ): Promise<AuthTokens> {
     const { refreshToken } = z.object({ refreshToken: z.string().min(1) }).parse(body)
-    return this.authService.refreshTokens(user.sub, refreshToken, user.fid)
+    return this.authService.refreshTokens(user, refreshToken)
   }
 
   @Post('logout')
@@ -49,7 +90,7 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Logout and invalidate refresh token' })
   async logout(@CurrentUser() user: JwtPayload): Promise<{ message: string }> {
-    await this.authService.logout(user.sub)
+    await this.authService.logout(user)
     return { message: 'Logged out successfully' }
   }
 
@@ -57,22 +98,21 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Switch active family and receive new tokens' })
+  @ApiOperation({ summary: 'Switch active family (same NIK) and receive new tokens' })
   async switchFamily(
     @CurrentUser() user: JwtPayload,
     @Body() body: { familyGroupId: string },
   ): Promise<AuthTokens> {
-    return this.authService.switchFamily(user.sub, body.familyGroupId)
+    return this.authService.switchFamily(user, body.familyGroupId)
   }
 
   @Get('my-families')
   @SkipThrottle()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'List all families the current user belongs to' })
-  async myFamilies(
-    @CurrentUser() user: JwtPayload,
-  ): Promise<Array<{ id: string; name: string; role: string }>> {
-    return this.authService.getMyFamilies(user.sub)
+  @ApiOperation({ summary: "List all families the current session's NIK belongs to" })
+  async myFamilies(@CurrentUser() user: JwtPayload): Promise<Array<{ id: string; name: string }>> {
+    if (!user.nik) return []
+    return this.authService.getMyFamilies(user.nik)
   }
 }

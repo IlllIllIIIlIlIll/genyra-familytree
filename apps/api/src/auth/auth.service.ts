@@ -1,13 +1,36 @@
 import {
   Injectable,
   UnauthorizedException,
-  BadRequestException,
   ForbiddenException,
 } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import * as argon2 from 'argon2'
 import { PrismaService } from '../prisma/prisma.service'
-import type { RegisterDto, LoginDto, AuthTokens } from '@genyra/shared-types'
+import type { GoogleProfile } from './strategies/google.strategy'
+import type { JwtPayload } from '../common/decorators/current-user.decorator'
+import type { AuthTokens } from '@genyra/shared-types'
+
+interface ExchangePayload {
+  purpose:   'exchange'
+  accountId: string
+}
+
+interface SelectPayload {
+  purpose:   'select'
+  accountId: string
+}
+
+export interface NikPersona {
+  nik:         string
+  displayName: string
+  families:    Array<{ id: string; name: string }>
+}
+
+export interface ExchangeResult {
+  isAdmin:      boolean
+  sessionToken: string
+  personas:     NikPersona[]
+}
 
 @Injectable()
 export class AuthService {
@@ -16,253 +39,209 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  async register(dto: RegisterDto): Promise<{ message: string }> {
-    const existingNik = await this.prisma.user.findUnique({ where: { nik: dto.nik } })
-    if (existingNik) {
-      if (existingNik.status === 'PENDING_APPROVAL') {
-        throw new BadRequestException('This NIK has already submitted a registration and is waiting for approval')
-      }
-      throw new BadRequestException('This NIK is already registered')
-    }
+  private get accessSecret(): string {
+    const secret = process.env['JWT_ACCESS_SECRET']
+    if (!secret) throw new Error('JWT_ACCESS_SECRET is not configured')
+    return secret
+  }
 
-    const passwordHash = await argon2.hash(dto.password)
-    const birthDate    = new Date(dto.birthDate)
+  private get refreshSecret(): string {
+    const secret = process.env['JWT_REFRESH_SECRET']
+    if (!secret) throw new Error('JWT_REFRESH_SECRET is not configured')
+    return secret
+  }
 
-    if (dto.inviteCode) {
-      // ── JOIN EXISTING FAMILY ───────────────────────────────────────────────
-      const invite = await this.prisma.invite.findUnique({ where: { code: dto.inviteCode } })
-      if (!invite || invite.status !== 'UNUSED' || invite.expiresAt < new Date()) {
-        throw new BadRequestException('Invalid or expired invite code')
-      }
+  /** Called from the Google OAuth callback. Finds or creates (or "claims", if
+   * an admin pre-provisioned this email) the Account, and returns a short-lived
+   * one-time exchange code for the frontend to redeem via POST /auth/exchange. */
+  async handleGoogleLogin(profile: GoogleProfile): Promise<string> {
+    let account = await this.prisma.account.findUnique({ where: { email: profile.email } })
 
-      // ── Validate referrer relationship (if provided) ──────────────────────
-      if (dto.referrerNik && dto.referrerRelationship) {
-        const referrerUser = await this.prisma.user.findUnique({
-          where:   { nik: dto.referrerNik },
-          include: { personNodes: true },
-        })
-        const referrerNode = referrerUser?.personNodes.find(
-          (n) => n.familyGroupId === invite.familyGroupId,
-        )
-        if (!referrerNode) {
-          throw new BadRequestException('Referrer not found in this family')
-        }
-
-        const referrerNodeId   = referrerNode.id
-        const referrerGender   = referrerNode.gender
-
-        if (dto.referrerRelationship === 'REFERRER_IS_FATHER') {
-          // Referrer claims to be the registrant's father — must be male and married
-          if (referrerGender !== 'MALE') {
-            throw new BadRequestException('The referrer you selected is not registered as male')
-          }
-          const spouseEdge = await this.prisma.relationshipEdge.findFirst({
-            where: {
-              OR: [
-                { sourceId: referrerNodeId, relationshipType: 'SPOUSE' },
-                { targetId: referrerNodeId, relationshipType: 'SPOUSE' },
-              ],
-            },
-          })
-          if (!spouseEdge) {
-            throw new BadRequestException('The referrer must be married to be registered as a father')
-          }
-          // Registrant cannot already have a father (checked at approval, but pre-check here too)
-          const existingFather = await this.prisma.relationshipEdge.findFirst({
-            where: {
-              targetId:         referrerNodeId,
-              relationshipType: 'PARENT_CHILD',
-              source:           { gender: 'MALE' },
-            },
-          })
-          if (existingFather) {
-            throw new BadRequestException('This family member already has a registered father')
-          }
-        }
-
-        if (dto.referrerRelationship === 'REFERRER_IS_SON') {
-          // Referrer is the son — must be male; registrant can't add a second father of same gender
-          if (referrerGender !== 'MALE') {
-            throw new BadRequestException('The referrer you selected is not registered as male')
-          }
-          const existingParent = await this.prisma.relationshipEdge.findFirst({
-            where: {
-              targetId:         referrerNodeId,
-              relationshipType: 'PARENT_CHILD',
-              source:           { gender: dto.gender },
-            },
-          })
-          if (existingParent) {
-            throw new BadRequestException('This child already has a parent of that gender registered')
-          }
-        }
-
-        if (dto.referrerRelationship === 'REFERRER_IS_DAUGHTER') {
-          // Referrer is the daughter — must be female
-          if (referrerGender !== 'FEMALE') {
-            throw new BadRequestException('The referrer you selected is not registered as female')
-          }
-          const existingParent = await this.prisma.relationshipEdge.findFirst({
-            where: {
-              targetId:         referrerNodeId,
-              relationshipType: 'PARENT_CHILD',
-              source:           { gender: dto.gender },
-            },
-          })
-          if (existingParent) {
-            throw new BadRequestException('This child already has a parent of that gender registered')
-          }
-        }
-      }
-
-      await this.prisma.$transaction(async (tx) => {
-        await tx.user.create({
-          data: {
-            nik:                 dto.nik,
-            passwordHash,
-            status:              'PENDING_APPROVAL',
-            referrerNik:         dto.referrerNik          ?? null,
-            referrerRelationship: dto.referrerRelationship ?? null,
-            personNodes: {
-              create: {
-                displayName:     dto.displayName,
-                surname:         dto.surname,
-                gender:          dto.gender,
-                birthDate,
-                birthPlace:      dto.birthPlace,
-                familyGroupId:   invite.familyGroupId,
-                pendingApproval: true,
-              },
-            },
-          },
-        })
-        await tx.invite.update({
-          where: { id: invite.id },
-          data:  { status: 'USED', usedAt: new Date() },
-        })
-      })
-
-      return { message: 'Registration submitted. Awaiting family head approval.' }
-    } else if (dto.familyName) {
-      // ── CREATE NEW FAMILY ─────────────────────────────────────────────────
-      const familyGroup = await this.prisma.familyGroup.create({
-        data: { name: dto.familyName },
-      })
-
-      await this.prisma.user.create({
+    if (!account) {
+      account = await this.prisma.account.create({
         data: {
-          nik: dto.nik,
-          passwordHash,
-          role:   'FAMILY_HEAD',
-          status: 'ACTIVE',
-          personNodes: {
-            create: {
-              displayName:   dto.displayName,
-              surname:       dto.surname,
-              gender:        dto.gender,
-              birthDate,
-              birthPlace:    dto.birthPlace,
-              familyGroupId: familyGroup.id,
-              role:          'FAMILY_HEAD',
-            },
-          },
+          email:     profile.email,
+          googleId:  profile.googleId,
+          name:      profile.name ?? null,
+          avatarUrl: profile.avatarUrl ?? null,
         },
       })
-
-      return { message: 'Family created! You can now log in.' }
-    } else {
-      throw new BadRequestException('Either an invite code or a family name is required')
+    } else if (!account.googleId) {
+      // Pre-provisioned by an admin (linked by email before first login) — claim it.
+      account = await this.prisma.account.update({
+        where: { id: account.id },
+        data: {
+          googleId:  profile.googleId,
+          name:      profile.name ?? account.name,
+          avatarUrl: profile.avatarUrl ?? account.avatarUrl,
+        },
+      })
     }
+
+    const exchangePayload: ExchangePayload = { purpose: 'exchange', accountId: account.id }
+    return this.jwtService.signAsync(exchangePayload, { secret: this.accessSecret, expiresIn: '60s' })
   }
 
-  async login(dto: LoginDto): Promise<AuthTokens> {
-    const user = await this.prisma.user.findUnique({ where: { nik: dto.nik } })
-    if (!user) throw new UnauthorizedException('Invalid credentials')
+  async exchange(code: string): Promise<ExchangeResult> {
+    const payload = await this.verifyShortLived<ExchangePayload>(code, 'exchange')
 
-    const passwordValid = await argon2.verify(user.passwordHash, dto.password)
-    if (!passwordValid) throw new UnauthorizedException('Invalid credentials')
-
-    if (user.status === 'DEACTIVATED') throw new ForbiddenException('Account has been deactivated')
-    if (user.status === 'PENDING_APPROVAL') throw new ForbiddenException('Account is pending approval from the family head')
-
-    // Pick first active family
-    const personNode = await this.prisma.personNode.findFirst({
-      where: { userId: user.id, pendingApproval: false, familyGroupId: { not: null } },
-      orderBy: { createdAt: 'asc' },
+    const account = await this.prisma.account.findUnique({
+      where:   { id: payload.accountId },
+      include: { nikLinks: true },
     })
-    if (!personNode?.familyGroupId) throw new ForbiddenException('No active family membership found')
+    if (!account) throw new UnauthorizedException('Account not found')
 
-    return this.generateTokens(user.id, personNode.familyGroupId)
+    const personas: NikPersona[] = []
+    if (!account.isAdmin) {
+      for (const link of account.nikLinks) {
+        const nodes = await this.prisma.personNode.findMany({
+          where:   { nikId: link.nik },
+          include: { familyGroup: { select: { id: true, name: true } } },
+        })
+        personas.push({
+          nik:         link.nik,
+          displayName: nodes[0]?.displayName ?? link.nik,
+          families:    nodes
+            .filter((n) => n.familyGroup)
+            .map((n) => ({ id: n.familyGroup!.id, name: n.familyGroup!.name })),
+        })
+      }
+    }
+
+    const sessionPayload: SelectPayload = { purpose: 'select', accountId: account.id }
+    const sessionToken = await this.jwtService.signAsync(sessionPayload, {
+      secret: this.accessSecret,
+      expiresIn: '10m',
+    })
+
+    return { isAdmin: account.isAdmin, sessionToken, personas }
   }
 
-  async refreshTokens(userId: string, refreshToken: string, familyGroupId: string): Promise<AuthTokens> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } })
-    if (!user?.refreshToken) throw new UnauthorizedException()
+  async selectAdmin(sessionToken: string): Promise<AuthTokens> {
+    const { accountId } = await this.verifyShortLived<SelectPayload>(sessionToken, 'select')
 
-    const tokenValid = await argon2.verify(user.refreshToken, refreshToken)
+    const account = await this.prisma.account.findUnique({ where: { id: accountId } })
+    if (!account) throw new UnauthorizedException('Account not found')
+    if (!account.isAdmin) throw new ForbiddenException('This account is not an admin account')
+
+    return this.generateTokens(accountId, { isAdmin: true })
+  }
+
+  async selectNik(sessionToken: string, nik: string, familyGroupId: string): Promise<AuthTokens> {
+    const { accountId } = await this.verifyShortLived<SelectPayload>(sessionToken, 'select')
+
+    const link = await this.prisma.nikLink.findUnique({
+      where: { accountId_nik: { accountId, nik } },
+    })
+    if (!link) throw new ForbiddenException('This Google account is not linked to that NIK')
+
+    const identity = await this.prisma.nikIdentity.findUnique({ where: { nik } })
+    if (!identity) throw new UnauthorizedException('NIK not found')
+    if (identity.status === 'DEACTIVATED') throw new ForbiddenException('This NIK has been deactivated')
+
+    const node = await this.prisma.personNode.findFirst({ where: { nikId: nik, familyGroupId } })
+    if (!node) throw new ForbiddenException('This NIK is not a member of that family')
+
+    if (identity.activeAccountId && identity.activeAccountId !== accountId) {
+      const holder = await this.prisma.account.findUnique({ where: { id: identity.activeAccountId } })
+      if (holder?.refreshToken) {
+        throw new ForbiddenException('This profile is currently active on another Google account')
+      }
+    }
+
+    await this.prisma.nikIdentity.update({
+      where: { nik },
+      data:  { activeAccountId: accountId },
+    })
+
+    return this.generateTokens(accountId, { isAdmin: false, nik, fid: familyGroupId })
+  }
+
+  async refreshTokens(payload: JwtPayload, refreshToken: string): Promise<AuthTokens> {
+    const account = await this.prisma.account.findUnique({ where: { id: payload.sub } })
+    if (!account?.refreshToken) throw new UnauthorizedException()
+
+    const tokenValid = await argon2.verify(account.refreshToken, refreshToken)
     if (!tokenValid) throw new UnauthorizedException('Invalid refresh token')
 
-    return this.generateTokens(user.id, familyGroupId)
+    if (payload.isAdmin) {
+      return this.generateTokens(account.id, { isAdmin: true })
+    }
+    if (!payload.nik || !payload.fid) throw new UnauthorizedException()
+    return this.generateTokens(account.id, { isAdmin: false, nik: payload.nik, fid: payload.fid })
   }
 
-  async logout(userId: string): Promise<void> {
-    await this.prisma.user.update({
-      where: { id: userId },
-      data:  { refreshToken: null },
+  async logout(payload: JwtPayload): Promise<void> {
+    if (payload.nik) {
+      await this.prisma.nikIdentity.updateMany({
+        where: { nik: payload.nik, activeAccountId: payload.sub },
+        data:  { activeAccountId: null },
+      })
+    }
+    await this.prisma.account.update({
+      where: { id: payload.sub },
+      data:  { refreshToken: null, activeNik: null },
     })
   }
 
-  async switchFamily(userId: string, familyGroupId: string): Promise<AuthTokens> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } })
-    if (!user) throw new UnauthorizedException('Invalid credentials')
-    if (user.status === 'DEACTIVATED') throw new ForbiddenException('Account has been deactivated')
+  async switchFamily(payload: JwtPayload, familyGroupId: string): Promise<AuthTokens> {
+    if (payload.isAdmin || !payload.nik) throw new ForbiddenException('Not a personal account session')
 
-    const personNode = await this.prisma.personNode.findFirst({
-      where: { userId, familyGroupId },
+    const node = await this.prisma.personNode.findFirst({
+      where: { nikId: payload.nik, familyGroupId },
     })
-    if (!personNode) throw new ForbiddenException('Not a member of this family')
-    if (personNode.pendingApproval) throw new ForbiddenException('Membership pending approval in this family')
+    if (!node) throw new ForbiddenException('Not a member of this family')
 
-    return this.generateTokens(userId, familyGroupId)
+    return this.generateTokens(payload.sub, { isAdmin: false, nik: payload.nik, fid: familyGroupId })
   }
 
-  async getMyFamilies(userId: string): Promise<Array<{ id: string; name: string; role: string }>> {
-    const personNodes = await this.prisma.personNode.findMany({
-      where: { userId, pendingApproval: false, familyGroupId: { not: null } },
+  async getMyFamilies(nik: string): Promise<Array<{ id: string; name: string }>> {
+    const nodes = await this.prisma.personNode.findMany({
+      where:   { nikId: nik, familyGroupId: { not: null } },
       include: { familyGroup: { select: { id: true, name: true } } },
     })
-    return personNodes
+    return nodes
       .filter((n) => n.familyGroup)
-      .map((n) => ({ id: n.familyGroupId!, name: n.familyGroup!.name, role: n.role }))
+      .map((n) => ({ id: n.familyGroup!.id, name: n.familyGroup!.name }))
   }
 
-  private async generateTokens(userId: string, familyGroupId: string): Promise<AuthTokens> {
-    // Get role from PersonNode for this family
-    const personNode = await this.prisma.personNode.findFirst({
-      where: { userId, familyGroupId },
-    })
-    const role = personNode?.role ?? 'FAMILY_MEMBER'
-    const payload = { sub: userId, role, fid: familyGroupId }
+  private async verifyShortLived<T extends { purpose: string }>(
+    token: string,
+    purpose: T['purpose'],
+  ): Promise<T> {
+    let payload: T
+    try {
+      payload = await this.jwtService.verifyAsync<T>(token, { secret: this.accessSecret })
+    } catch {
+      throw new UnauthorizedException('Invalid or expired token')
+    }
+    if (payload.purpose !== purpose) throw new UnauthorizedException('Invalid token')
+    return payload
+  }
 
-    const accessSecret  = process.env['JWT_ACCESS_SECRET']
-    const refreshSecret = process.env['JWT_REFRESH_SECRET']
-    if (!accessSecret || !refreshSecret) throw new Error('JWT secrets not configured')
+  private async generateTokens(
+    accountId: string,
+    scope: { isAdmin: true } | { isAdmin: false; nik: string; fid: string },
+  ): Promise<AuthTokens> {
+    const payload: JwtPayload = scope.isAdmin
+      ? { sub: accountId, isAdmin: true }
+      : { sub: accountId, isAdmin: false, nik: scope.nik, fid: scope.fid }
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {
-        secret:    accessSecret,
+        secret:    this.accessSecret,
         expiresIn: process.env['JWT_ACCESS_EXPIRES_IN'] ?? '15m',
       }),
       this.jwtService.signAsync(payload, {
-        secret:    refreshSecret,
+        secret:    this.refreshSecret,
         expiresIn: process.env['JWT_REFRESH_EXPIRES_IN'] ?? '7d',
       }),
     ])
 
     const hashedRefresh = await argon2.hash(refreshToken)
-    await this.prisma.user.update({
-      where: { id: userId },
-      data:  { refreshToken: hashedRefresh },
+    await this.prisma.account.update({
+      where: { id: accountId },
+      data:  { refreshToken: hashedRefresh, activeNik: scope.isAdmin ? null : scope.nik },
     })
 
     return { accessToken, refreshToken }

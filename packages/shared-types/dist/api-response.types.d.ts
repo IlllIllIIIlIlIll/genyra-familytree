@@ -3,20 +3,23 @@ export declare const FamilyGroupSchema: z.ZodObject<{
     id: z.ZodString;
     name: z.ZodString;
     description: z.ZodNullable<z.ZodString>;
+    adminAccountId: z.ZodString;
     createdAt: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     id: string;
-    createdAt: string;
     name: string;
+    createdAt: string;
     description: string | null;
+    adminAccountId: string;
 }, {
     id: string;
-    createdAt: string;
     name: string;
+    createdAt: string;
     description: string | null;
+    adminAccountId: string;
 }>;
 export type FamilyGroup = z.infer<typeof FamilyGroupSchema>;
-export declare const CreateFamilyGroupSchema: z.ZodObject<{
+export declare const CreateAdminFamilyGroupSchema: z.ZodObject<{
     name: z.ZodString;
     description: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
@@ -26,40 +29,7 @@ export declare const CreateFamilyGroupSchema: z.ZodObject<{
     name: string;
     description?: string | undefined;
 }>;
-export type CreateFamilyGroupDto = z.infer<typeof CreateFamilyGroupSchema>;
-export declare const InviteStatusSchema: z.ZodEnum<["UNUSED", "USED", "EXPIRED"]>;
-export type InviteStatus = z.infer<typeof InviteStatusSchema>;
-export declare const InviteSchema: z.ZodObject<{
-    id: z.ZodString;
-    code: z.ZodString;
-    status: z.ZodEnum<["UNUSED", "USED", "EXPIRED"]>;
-    expiresAt: z.ZodString;
-    familyGroupId: z.ZodString;
-    createdAt: z.ZodString;
-}, "strip", z.ZodTypeAny, {
-    code: string;
-    status: "UNUSED" | "USED" | "EXPIRED";
-    id: string;
-    familyGroupId: string;
-    createdAt: string;
-    expiresAt: string;
-}, {
-    code: string;
-    status: "UNUSED" | "USED" | "EXPIRED";
-    id: string;
-    familyGroupId: string;
-    createdAt: string;
-    expiresAt: string;
-}>;
-export type Invite = z.infer<typeof InviteSchema>;
-export declare const ValidateInviteSchema: z.ZodObject<{
-    code: z.ZodString;
-}, "strip", z.ZodTypeAny, {
-    code: string;
-}, {
-    code: string;
-}>;
-export type ValidateInviteDto = z.infer<typeof ValidateInviteSchema>;
+export type CreateAdminFamilyGroupDto = z.infer<typeof CreateAdminFamilyGroupSchema>;
 export declare const MapDataSchema: z.ZodObject<{
     familyName: z.ZodString;
     nodes: z.ZodArray<z.ZodObject<{
@@ -75,52 +45,49 @@ export declare const MapDataSchema: z.ZodObject<{
         avatarUrl: z.ZodNullable<z.ZodString>;
         isDeceased: z.ZodBoolean;
         isPlaceholder: z.ZodBoolean;
-        pendingApproval: z.ZodBoolean;
         canvasX: z.ZodNumber;
         canvasY: z.ZodNumber;
-        userId: z.ZodNullable<z.ZodString>;
+        nikId: z.ZodNullable<z.ZodString>;
         familyGroupId: z.ZodNullable<z.ZodString>;
         createdAt: z.ZodString;
         updatedAt: z.ZodString;
     }, "strip", z.ZodTypeAny, {
+        id: string;
+        avatarUrl: string | null;
+        createdAt: string;
+        nik: string | null;
         displayName: string;
         gender: "MALE" | "FEMALE" | null;
         surname: string | null;
-        nik: string | null;
         birthDate: string | null;
         birthPlace: string | null;
-        id: string;
-        familyGroupId: string | null;
-        createdAt: string;
-        deathDate: string | null;
-        bio: string | null;
-        avatarUrl: string | null;
         isDeceased: boolean;
+        deathDate: string | null;
+        familyGroupId: string | null;
+        bio: string | null;
         isPlaceholder: boolean;
-        pendingApproval: boolean;
         canvasX: number;
         canvasY: number;
-        userId: string | null;
+        nikId: string | null;
         updatedAt: string;
     }, {
+        id: string;
+        avatarUrl: string | null;
+        createdAt: string;
+        nik: string | null;
         displayName: string;
         gender: "MALE" | "FEMALE" | null;
         surname: string | null;
-        nik: string | null;
         birthDate: string | null;
         birthPlace: string | null;
-        id: string;
-        familyGroupId: string | null;
-        createdAt: string;
-        deathDate: string | null;
-        bio: string | null;
-        avatarUrl: string | null;
         isDeceased: boolean;
+        deathDate: string | null;
+        familyGroupId: string | null;
+        bio: string | null;
         isPlaceholder: boolean;
-        pendingApproval: boolean;
         canvasX: number;
         canvasY: number;
-        userId: string | null;
+        nikId: string | null;
         updatedAt: string;
     }>, "many">;
     edges: z.ZodArray<z.ZodObject<{
@@ -154,24 +121,23 @@ export declare const MapDataSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     familyName: string;
     nodes: {
+        id: string;
+        avatarUrl: string | null;
+        createdAt: string;
+        nik: string | null;
         displayName: string;
         gender: "MALE" | "FEMALE" | null;
         surname: string | null;
-        nik: string | null;
         birthDate: string | null;
         birthPlace: string | null;
-        id: string;
-        familyGroupId: string | null;
-        createdAt: string;
-        deathDate: string | null;
-        bio: string | null;
-        avatarUrl: string | null;
         isDeceased: boolean;
+        deathDate: string | null;
+        familyGroupId: string | null;
+        bio: string | null;
         isPlaceholder: boolean;
-        pendingApproval: boolean;
         canvasX: number;
         canvasY: number;
-        userId: string | null;
+        nikId: string | null;
         updatedAt: string;
     }[];
     edges: {
@@ -187,24 +153,23 @@ export declare const MapDataSchema: z.ZodObject<{
 }, {
     familyName: string;
     nodes: {
+        id: string;
+        avatarUrl: string | null;
+        createdAt: string;
+        nik: string | null;
         displayName: string;
         gender: "MALE" | "FEMALE" | null;
         surname: string | null;
-        nik: string | null;
         birthDate: string | null;
         birthPlace: string | null;
-        id: string;
-        familyGroupId: string | null;
-        createdAt: string;
-        deathDate: string | null;
-        bio: string | null;
-        avatarUrl: string | null;
         isDeceased: boolean;
+        deathDate: string | null;
+        familyGroupId: string | null;
+        bio: string | null;
         isPlaceholder: boolean;
-        pendingApproval: boolean;
         canvasX: number;
         canvasY: number;
-        userId: string | null;
+        nikId: string | null;
         updatedAt: string;
     }[];
     edges: {
@@ -236,32 +201,58 @@ export declare const NotificationSchema: z.ZodObject<{
     type: z.ZodString;
     message: z.ZodString;
     personNodeId: z.ZodNullable<z.ZodString>;
+    readAt: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     createdAt: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     message: string;
     type: string;
     id: string;
-    familyGroupId: string;
     createdAt: string;
+    familyGroupId: string;
     personNodeId: string | null;
+    readAt?: string | null | undefined;
 }, {
     message: string;
     type: string;
     id: string;
-    familyGroupId: string;
     createdAt: string;
+    familyGroupId: string;
     personNodeId: string | null;
+    readAt?: string | null | undefined;
 }>;
 export type Notification = z.infer<typeof NotificationSchema>;
-export declare const AdminBadgeSchema: z.ZodObject<{
-    pendingCount: z.ZodNumber;
-    inviteExpired: z.ZodBoolean;
+export declare const LeaveRequestSchema: z.ZodObject<{
+    id: z.ZodString;
+    nik: z.ZodString;
+    displayName: z.ZodString;
+    familyGroupId: z.ZodString;
+    status: z.ZodEnum<["PENDING", "APPROVED", "REJECTED"]>;
+    createdAt: z.ZodString;
 }, "strip", z.ZodTypeAny, {
-    pendingCount: number;
-    inviteExpired: boolean;
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    id: string;
+    createdAt: string;
+    nik: string;
+    displayName: string;
+    familyGroupId: string;
 }, {
-    pendingCount: number;
-    inviteExpired: boolean;
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    id: string;
+    createdAt: string;
+    nik: string;
+    displayName: string;
+    familyGroupId: string;
 }>;
-export type AdminBadge = z.infer<typeof AdminBadgeSchema>;
+export type LeaveRequest = z.infer<typeof LeaveRequestSchema>;
+export declare const FamilySummarySchema: z.ZodObject<{
+    id: z.ZodString;
+    name: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    id: string;
+    name: string;
+}, {
+    id: string;
+    name: string;
+}>;
+export type FamilySummary = z.infer<typeof FamilySummarySchema>;
 //# sourceMappingURL=api-response.types.d.ts.map

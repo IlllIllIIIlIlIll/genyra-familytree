@@ -1,82 +1,29 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common'
-import { NotificationsService } from '../notifications/notifications.service'
+import type { Prisma } from '@prisma/client'
+import { PrismaService } from '../prisma/prisma.service'
+import type { JwtPayload } from '../common/decorators/current-user.decorator'
+import type { PersonNode, UpdatePersonNodeDto, UpdateCanvasPositionDto, AddChildDto } from '@genyra/shared-types'
 
 function sanitizeAvatarUrl(url: string | null | undefined): string | null {
   if (!url) return null
   if (url.startsWith('data:') || url.startsWith('https://')) return url
   return null
 }
-import type { Prisma } from '@prisma/client'
-import { PrismaService } from '../prisma/prisma.service'
-import type { PersonNode, CreatePersonNodeDto, UpdatePersonNodeDto, UpdateCanvasPositionDto, AddChildDto } from '@genyra/shared-types'
 
 @Injectable()
 export class PersonNodesService {
-  constructor(
-    private readonly prisma:        PrismaService,
-    private readonly notifications: NotificationsService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async findById(id: string): Promise<PersonNode> {
-    const node = await this.prisma.personNode.findUnique({
-      where: { id },
-      include: { user: { select: { nik: true } } },
-    })
-    if (!node) throw new NotFoundException('Person node not found')
-    return this.toDto(node)
-  }
-
-  async createForUser(dto: CreatePersonNodeDto, userId: string): Promise<PersonNode> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      include: { personNodes: { where: { familyGroupId: { not: null } }, take: 1 } },
-    })
-    const familyGroupId = user?.personNodes[0]?.familyGroupId
-    if (!familyGroupId) {
-      throw new ForbiddenException('User does not belong to a family group')
-    }
-    return this.create(dto, familyGroupId)
-  }
-
-  async create(dto: CreatePersonNodeDto, familyGroupId: string): Promise<PersonNode> {
-    const node = await this.prisma.personNode.create({
-      data: {
-        displayName: dto.displayName,
-        gender: dto.gender ?? null,
-        surname: dto.surname ?? null,
-        birthDate: dto.birthDate ? new Date(dto.birthDate) : null,
-        birthPlace: dto.birthPlace ?? null,
-        deathDate: dto.deathDate ? new Date(dto.deathDate) : null,
-        bio: dto.bio ?? null,
-        avatarUrl: dto.avatarUrl ?? null,
-        isDeceased: dto.isDeceased ?? false,
-        isPlaceholder: dto.isPlaceholder ?? false,
-        canvasX: dto.canvasX ?? 0,
-        canvasY: dto.canvasY ?? 0,
-        userId: dto.userId ?? null,
-        familyGroupId,
-      },
-      include: { user: { select: { nik: true } } },
-    })
-    return this.toDto(node)
-  }
-
-  async update(
-    id: string,
-    dto: UpdatePersonNodeDto,
-    requestingUserId: string,
-  ): Promise<PersonNode> {
     const node = await this.prisma.personNode.findUnique({ where: { id } })
     if (!node) throw new NotFoundException('Person node not found')
+    return this.toDto(node)
+  }
 
-    // C-06: Use PersonNode.role scoped to node's family (not User.role)
-    const requesterNode = await this.prisma.personNode.findFirst({
-      where: { userId: requestingUserId, ...(node.familyGroupId ? { familyGroupId: node.familyGroupId } : {}) },
-    })
-    const isSelf = node.userId === requestingUserId
-    const isFamilyHead = requesterNode?.role === 'FAMILY_HEAD'
-
-    if (!isSelf && !isFamilyHead) {
+  async update(id: string, dto: UpdatePersonNodeDto, requester: JwtPayload): Promise<PersonNode> {
+    const node = await this.prisma.personNode.findUnique({ where: { id } })
+    if (!node) throw new NotFoundException('Person node not found')
+    if (!requester.nik || node.nikId !== requester.nik) {
       throw new ForbiddenException('You can only edit your own profile')
     }
 
@@ -86,47 +33,25 @@ export class PersonNodesService {
       ...(dto.surname !== undefined && { surname: dto.surname }),
       ...(dto.birthDate !== undefined && { birthDate: dto.birthDate ? new Date(dto.birthDate) : null }),
       ...(dto.birthPlace !== undefined && { birthPlace: dto.birthPlace }),
-      ...(dto.deathDate !== undefined && { deathDate: dto.deathDate ? new Date(dto.deathDate) : null }),
       ...(dto.bio !== undefined && { bio: dto.bio }),
       ...(dto.avatarUrl !== undefined && { avatarUrl: dto.avatarUrl }),
-      ...(dto.isDeceased !== undefined && { isDeceased: dto.isDeceased }),
-      ...(dto.isPlaceholder !== undefined && { isPlaceholder: dto.isPlaceholder }),
     }
 
-    const updated = await this.prisma.personNode.update({
-      where: { id },
-      data: updateData,
-      include: { user: { select: { nik: true } } },
-    })
-
-    // Notify family when a member is marked as deceased
-    if (dto.isDeceased === true && !node.isDeceased && node.familyGroupId) {
-      await this.prisma.notification.create({
-        data: {
-          familyGroupId: node.familyGroupId,
-          type:          'MEMBER_DECEASED',
-          message:       `${node.displayName} has passed away. May their memory be cherished.`,
-          personNodeId:  node.id,
-        },
-      })
-      await this.notifications.pruneForFamily(node.familyGroupId)
-    }
-
+    const updated = await this.prisma.personNode.update({ where: { id }, data: updateData })
     return this.toDto(updated)
   }
 
   async updateCanvasPosition(
     id: string,
     dto: UpdateCanvasPositionDto,
-    requestingUserId: string,
+    requester: JwtPayload,
   ): Promise<PersonNode> {
     const node = await this.prisma.personNode.findUnique({ where: { id } })
     if (!node) throw new NotFoundException('Person node not found')
 
-    // Verify requester is a member of the same family
     const isMember = node.familyGroupId
       ? await this.prisma.personNode.findFirst({
-          where: { userId: requestingUserId, familyGroupId: node.familyGroupId },
+          where: { nikId: requester.nik ?? '__none__', familyGroupId: node.familyGroupId },
         })
       : null
     if (!isMember) throw new ForbiddenException('Not a member of this family')
@@ -134,60 +59,18 @@ export class PersonNodesService {
     const updated = await this.prisma.personNode.update({
       where: { id },
       data: { canvasX: dto.canvasX, canvasY: dto.canvasY },
-      include: { user: { select: { nik: true } } },
     })
     return this.toDto(updated)
   }
 
-  async delete(id: string, requestingUserId: string): Promise<void> {
-    const headNode = await this.prisma.personNode.findFirst({
-      where: { userId: requestingUserId, role: 'FAMILY_HEAD', familyGroupId: { not: null } },
+  async addChild(dto: AddChildDto, requester: JwtPayload): Promise<PersonNode> {
+    if (!requester.nik || !requester.fid) throw new ForbiddenException('Not a personal account session')
+
+    const activeNode = await this.prisma.personNode.findFirst({
+      where: { nikId: requester.nik, familyGroupId: requester.fid },
     })
-    if (!headNode) throw new ForbiddenException('Only Family Head can delete person nodes')
+    if (!activeNode) throw new ForbiddenException('You must be in a family group to add a child')
 
-    // C-02: Verify the target node belongs to the head's family
-    const node = await this.prisma.personNode.findUnique({ where: { id } })
-    if (!node) throw new NotFoundException('Person node not found')
-    if (node.familyGroupId !== headNode.familyGroupId) {
-      throw new ForbiddenException('This person does not belong to your family')
-    }
-
-    await this.prisma.personNode.delete({ where: { id } })
-  }
-
-  /** Nodes with no linked User account (created by old addChild or similar) — Family Head only. */
-  async findUnlinked(requestingUserId: string): Promise<PersonNode[]> {
-    const headNode = await this.prisma.personNode.findFirst({
-      where: { userId: requestingUserId, role: 'FAMILY_HEAD', familyGroupId: { not: null } },
-      select: { familyGroupId: true },
-    })
-    const familyGroupId = headNode?.familyGroupId
-    if (!familyGroupId) return []
-
-    const nodes = await this.prisma.personNode.findMany({
-      where: {
-        familyGroupId,
-        userId:          null,
-        isPlaceholder:   false,
-        pendingApproval: false,
-      },
-      include: { user: { select: { nik: true } } },
-    })
-    return nodes.map((n) => this.toDto(n))
-  }
-
-  async addChild(dto: AddChildDto, requestingUserId: string): Promise<PersonNode> {
-    // C-03: Create only a PersonNode (no User account / no NIK required)
-    const user = await this.prisma.user.findUnique({
-      where:   { id: requestingUserId },
-      include: { personNodes: { where: { familyGroupId: { not: null } }, take: 1 } },
-    })
-    const activeNode = user?.personNodes[0]
-    if (!activeNode?.familyGroupId) {
-      throw new ForbiddenException('You must be in a family group to add a child')
-    }
-
-    // Must have a spouse relationship
     const spouseEdge = await this.prisma.relationshipEdge.findFirst({
       where: {
         OR: [
@@ -196,34 +79,22 @@ export class PersonNodesService {
         ],
       },
     })
-    if (!spouseEdge) {
-      throw new BadRequestException('You must be married (have a spouse) to add a child')
-    }
+    if (!spouseEdge) throw new BadRequestException('You must be married (have a spouse) to add a child')
 
-    const spouseId      = spouseEdge.sourceId === activeNode.id
-      ? spouseEdge.targetId
-      : spouseEdge.sourceId
-    // C-06: Use PersonNode.role scoped to the active family
-    const requesterNode = await this.prisma.personNode.findFirst({
-      where: { userId: requestingUserId, familyGroupId: activeNode.familyGroupId },
-    })
-    const isFamilyHead  = requesterNode?.role === 'FAMILY_HEAD'
-    const familyGroupId = activeNode.familyGroupId
+    const spouseId = spouseEdge.sourceId === activeNode.id ? spouseEdge.targetId : spouseEdge.sourceId
+    const familyGroupId = requester.fid
 
     const child = await this.prisma.$transaction(async (tx) => {
       const childNode = await tx.personNode.create({
         data: {
-          displayName:     dto.displayName,
-          gender:          dto.gender ?? null,
-          surname:         dto.surname,
-          birthDate:       dto.birthDate ? new Date(dto.birthDate) : null,
-          birthPlace:      dto.birthPlace ?? null,
+          displayName: dto.displayName,
+          gender:      dto.gender ?? null,
+          surname:     dto.surname,
+          birthDate:   dto.birthDate ? new Date(dto.birthDate) : null,
+          birthPlace:  dto.birthPlace ?? null,
           familyGroupId,
-          isPlaceholder:   false,
-          pendingApproval: !isFamilyHead,
-          userId:          null,
+          isPlaceholder: false,
         },
-        include: { user: { select: { nik: true } } },
       })
 
       await tx.relationshipEdge.createMany({
@@ -240,57 +111,21 @@ export class PersonNodesService {
     return this.toDto(child)
   }
 
-  async search(q: string, requestingUserId: string): Promise<PersonNode[]> {
-    // H-06: Search persons in requester's current family
-    const user = await this.prisma.user.findUnique({
-      where: { id: requestingUserId },
-      include: { personNodes: { where: { familyGroupId: { not: null } }, take: 1 } },
-    })
-    const familyGroupId = user?.personNodes[0]?.familyGroupId
+  async search(q: string, requester: JwtPayload): Promise<PersonNode[]> {
+    const familyGroupId = requester.fid
     if (!familyGroupId) return []
 
     const nodes = await this.prisma.personNode.findMany({
       where: {
         familyGroupId,
-        pendingApproval: false,
         OR: [
           { displayName: { contains: q, mode: 'insensitive' } },
           { surname:      { contains: q, mode: 'insensitive' } },
         ],
       },
       take: 10,
-      include: { user: { select: { nik: true } } },
     })
     return nodes.map((n) => this.toDto(n))
-  }
-
-  async approve(id: string, requestingUserId: string): Promise<PersonNode> {
-    const node = await this.prisma.personNode.findUnique({ where: { id } })
-    if (!node) throw new NotFoundException('Person node not found')
-
-    // C-06: Use PersonNode.role scoped to node's family
-    const requesterNode = await this.prisma.personNode.findFirst({
-      where: { userId: requestingUserId, ...(node.familyGroupId ? { familyGroupId: node.familyGroupId } : {}) },
-    })
-    if (requesterNode?.role !== 'FAMILY_HEAD') {
-      throw new ForbiddenException('Only Family Head can approve pending members')
-    }
-
-    const updated = await this.prisma.personNode.update({
-      where: { id },
-      data:  { pendingApproval: false },
-      include: { user: { select: { nik: true } } },
-    })
-
-    // Also activate the linked user if they are pending
-    if (node.userId) {
-      await this.prisma.user.update({
-        where: { id: node.userId },
-        data:  { status: 'ACTIVE' },
-      })
-    }
-
-    return this.toDto(updated)
   }
 
   private toDto(node: {
@@ -305,21 +140,19 @@ export class PersonNodesService {
     avatarUrl: string | null
     isDeceased: boolean
     isPlaceholder: boolean
-    pendingApproval: boolean
     canvasX: number
     canvasY: number
-    userId: string | null
+    nikId: string | null
     familyGroupId: string | null
     createdAt: Date
     updatedAt: Date
-    user?: { nik: string } | null
   }): PersonNode {
     return {
       id: node.id,
       displayName: node.displayName,
       gender: node.gender ?? null,
       surname: node.surname ?? null,
-      nik: node.user?.nik ?? null,
+      nik: node.nikId ?? null,
       birthDate: node.birthDate?.toISOString() ?? null,
       birthPlace: node.birthPlace,
       deathDate: node.deathDate?.toISOString() ?? null,
@@ -327,10 +160,9 @@ export class PersonNodesService {
       avatarUrl: sanitizeAvatarUrl(node.avatarUrl),
       isDeceased: node.isDeceased,
       isPlaceholder: node.isPlaceholder,
-      pendingApproval: node.pendingApproval,
       canvasX: node.canvasX,
       canvasY: node.canvasY,
-      userId: node.userId,
+      nikId: node.nikId,
       familyGroupId: node.familyGroupId,
       createdAt: node.createdAt.toISOString(),
       updatedAt: node.updatedAt.toISOString(),

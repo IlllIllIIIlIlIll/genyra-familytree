@@ -3,95 +3,93 @@ import { z } from 'zod'
 export const GenderSchema = z.enum(['MALE', 'FEMALE'])
 export type Gender = z.infer<typeof GenderSchema>
 
-export const UserRoleSchema = z.enum(['FAMILY_MEMBER', 'FAMILY_HEAD'])
-export type UserRole = z.infer<typeof UserRoleSchema>
-
-export const MemberStatusSchema = z.enum(['PENDING_APPROVAL', 'ACTIVE', 'DEACTIVATED'])
+export const MemberStatusSchema = z.enum(['ACTIVE', 'DEACTIVATED'])
 export type MemberStatus = z.infer<typeof MemberStatusSchema>
 
-// From the registrant's perspective: what is the referrer to them?
-export const ReferrerRelationshipSchema = z.enum([
-  'REFERRER_IS_FATHER',
-  'REFERRER_IS_SON',
-  'REFERRER_IS_DAUGHTER',
-  'REFERRER_IS_SPOUSE',
-  'REFERRER_IS_SIBLING',
-])
-export type ReferrerRelationship = z.infer<typeof ReferrerRelationshipSchema>
+// ─── Account (Google-authenticated login identity) ─────────────────────────
 
-export const RegisterSchema = z.object({
-  password:             z.string().min(8, 'Password must be at least 8 characters').max(100),
-  displayName:          z.string().min(1, 'Full name is required').max(100),
-  gender:               GenderSchema,
-  surname:              z.string().min(1, 'Nickname is required').max(50).regex(/^\S+$/, 'Nickname must be a single word'),
-  nik:                  z.string().length(16, 'NIK must be exactly 16 digits').regex(/^\d{16}$/, 'NIK must be exactly 16 digits'),
-  birthDate:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Please enter a valid date'),
-  birthPlace:           z.string().min(1, 'Place of birth is required').max(100),
-  // join path
-  inviteCode:           z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()),
-  referrerNik:          z.preprocess(
-    (v) => (v === '' ? undefined : v),
-    z.string().length(16, 'NIK must be exactly 16 digits').regex(/^\d{16}$/, 'NIK must be exactly 16 digits').optional(),
-  ),
-  referrerRelationship: ReferrerRelationshipSchema.optional(),
-  // create path
-  familyName:           z.preprocess((v) => (v === '' ? undefined : v), z.string().min(1).max(100).optional()),
-}).refine(
-  (d) => !!(d.inviteCode ?? d.familyName),
-  { message: 'Either an invite code or a family name is required', path: ['inviteCode'] },
-).refine(
-  (d) => !d.inviteCode || !!d.referrerNik,
-  { message: 'Referrer NIK is required when joining a family', path: ['referrerNik'] },
-)
-export type RegisterDto = z.infer<typeof RegisterSchema>
-
-export const JoinGroupSchema = z.object({
-  inviteCode: z.string().min(1),
+export const AccountSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  name: z.string().nullable(),
+  avatarUrl: z.string().nullable(),
+  isAdmin: z.boolean(),
+  createdAt: z.string().datetime(),
 })
-export type JoinGroupDto = z.infer<typeof JoinGroupSchema>
+export type Account = z.infer<typeof AccountSchema>
 
-export const LoginSchema = z.object({
-  nik: z.string().length(16).regex(/^\d{16}$/, 'NIK must be exactly 16 digits'),
-  password: z.string().min(1),
+// ─── NikIdentity (one real person, keyed by government NIK) ────────────────
+
+export const NikIdentitySchema = z.object({
+  nik: z.string(),
+  status: MemberStatusSchema,
+  createdAt: z.string().datetime(),
 })
-export type LoginDto = z.infer<typeof LoginSchema>
+export type NikIdentity = z.infer<typeof NikIdentitySchema>
+
+export const NikLinkSchema = z.object({
+  id: z.string(),
+  accountId: z.string(),
+  nik: z.string(),
+  createdAt: z.string().datetime(),
+})
+export type NikLink = z.infer<typeof NikLinkSchema>
+
+export const CreateNikIdentitySchema = z.object({
+  nik:         z.string().length(16, 'NIK must be exactly 16 digits').regex(/^\d{16}$/, 'NIK must be exactly 16 digits'),
+  displayName: z.string().min(1, 'Full name is required').max(100),
+  gender:      GenderSchema.optional().nullable(),
+  surname:     z.string().max(50).regex(/^\S+$/, 'Nickname must be a single word').optional().nullable(),
+  birthDate:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Please enter a valid date').optional().nullable(),
+  birthPlace:  z.string().max(100).optional().nullable(),
+  isDeceased:  z.boolean().optional().default(false),
+  deathDate:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Please enter a valid date').optional().nullable(),
+})
+export type CreateNikIdentityDto = z.infer<typeof CreateNikIdentitySchema>
+
+export const LinkAccountSchema = z.object({
+  email: z.string().email('Please enter a valid email address'),
+})
+export type LinkAccountDto = z.infer<typeof LinkAccountSchema>
+
+// ─── Current-session personal profile (GET /users/me) ──────────────────────
 
 export const UserSchema = z.object({
-  id: z.string(),
   nik: z.string(),
-  role: UserRoleSchema,
   status: MemberStatusSchema,
   familyGroupId: z.string().nullable(),
-  createdAt: z.string().datetime(),
-  // All identity fields now come from PersonNode
   displayName: z.string(),
-  gender: GenderSchema,
-  surname: z.string(),
-  birthDate: z.string(),
-  birthPlace: z.string(),
-  // Referral info (only populated for pending members)
-  referrerNik:          z.string().nullable().optional(),
-  referrerRelationship: z.string().nullable().optional(),
+  gender: GenderSchema.nullable(),
+  surname: z.string().nullable(),
+  birthDate: z.string().nullable(),
+  birthPlace: z.string().nullable(),
 })
 export type User = z.infer<typeof UserSchema>
 
-export const UpdateUserSchema = z.object({
-  password: z.string().min(8).max(100).optional(),
-})
-export type UpdateUserDto = z.infer<typeof UpdateUserSchema>
+// ─── Google OAuth exchange flow ─────────────────────────────────────────────
 
-// ─── Family Setup ───────────────────────────────────────────────────────────
-// Called after registration to create the family with at least 2 parents.
-
-export const CreateFamilyWithParentsSchema = z.object({
-  familyName: z.string().min(1).max(100),
-  userIsParent: z.enum(['FATHER', 'MOTHER']),
-  // The OTHER parent (the one who isn't the user)
-  otherParentName: z.string().min(1).max(100),
-  otherParentSurname: z
-    .string()
-    .max(50)
-    .regex(/^\S+$/, 'Surname must be a single word')
-    .optional(),
+export const NikPersonaSchema = z.object({
+  nik: z.string(),
+  displayName: z.string(),
+  families: z.array(z.object({ id: z.string(), name: z.string() })),
 })
-export type CreateFamilyWithParentsDto = z.infer<typeof CreateFamilyWithParentsSchema>
+export type NikPersona = z.infer<typeof NikPersonaSchema>
+
+export const GoogleExchangeResponseSchema = z.object({
+  isAdmin: z.boolean(),
+  sessionToken: z.string(),
+  personas: z.array(NikPersonaSchema),
+})
+export type GoogleExchangeResponse = z.infer<typeof GoogleExchangeResponseSchema>
+
+export const SelectAdminSchema = z.object({
+  sessionToken: z.string().min(1),
+})
+export type SelectAdminDto = z.infer<typeof SelectAdminSchema>
+
+export const SelectNikSchema = z.object({
+  sessionToken: z.string().min(1),
+  nik: z.string().min(1),
+  familyGroupId: z.string().min(1),
+})
+export type SelectNikDto = z.infer<typeof SelectNikSchema>

@@ -1,5 +1,6 @@
 import { Injectable, ForbiddenException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import type { JwtPayload } from '../common/decorators/current-user.decorator'
 import type { Notification } from '@genyra/shared-types'
 
 const MAX_NOTIFICATIONS = 5
@@ -8,12 +9,8 @@ const MAX_NOTIFICATIONS = 5
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getForFamily(requestingUserId: string): Promise<Notification[]> {
-    const user = await this.prisma.user.findUnique({
-      where:   { id: requestingUserId },
-      include: { personNodes: { where: { familyGroupId: { not: null } }, select: { familyGroupId: true }, take: 1 } },
-    })
-    const familyGroupId = user?.personNodes[0]?.familyGroupId
+  async getForFamily(requester: JwtPayload): Promise<Notification[]> {
+    const familyGroupId = await this.resolveFamilyGroupId(requester)
     if (!familyGroupId) throw new ForbiddenException('Not a member of any family group')
 
     const rows = await this.prisma.notification.findMany({
@@ -33,31 +30,17 @@ export class NotificationsService {
     }))
   }
 
-  async markRead(id: string, requestingUserId: string): Promise<void> {
+  async markRead(id: string, requester: JwtPayload): Promise<void> {
     const notif = await this.prisma.notification.findUnique({ where: { id } })
     if (!notif) return
-
-    // Verify user belongs to this family
-    const member = await this.prisma.personNode.findFirst({
-      where: { userId: requestingUserId, familyGroupId: notif.familyGroupId },
-    })
-    if (!member) throw new ForbiddenException('Not a member of this family')
-
-    await this.prisma.notification.update({
-      where: { id },
-      data:  { readAt: new Date() },
-    })
+    await this.assertCanAccess(notif.familyGroupId, requester)
+    await this.prisma.notification.update({ where: { id }, data: { readAt: new Date() } })
   }
 
-  async dismiss(id: string, requestingUserId: string): Promise<void> {
+  async dismiss(id: string, requester: JwtPayload): Promise<void> {
     const notif = await this.prisma.notification.findUnique({ where: { id } })
     if (!notif) return
-
-    const member = await this.prisma.personNode.findFirst({
-      where: { userId: requestingUserId, familyGroupId: notif.familyGroupId },
-    })
-    if (!member) throw new ForbiddenException('Not a member of this family')
-
+    await this.assertCanAccess(notif.familyGroupId, requester)
     await this.prisma.notification.delete({ where: { id } })
   }
 
@@ -72,5 +55,18 @@ export class NotificationsService {
       const toDelete = all.slice(MAX_NOTIFICATIONS).map((n) => n.id)
       await this.prisma.notification.deleteMany({ where: { id: { in: toDelete } } })
     }
+  }
+
+  private async resolveFamilyGroupId(requester: JwtPayload): Promise<string | null> {
+    if (requester.isAdmin) {
+      const group = await this.prisma.familyGroup.findUnique({ where: { adminAccountId: requester.sub } })
+      return group?.id ?? null
+    }
+    return requester.fid ?? null
+  }
+
+  private async assertCanAccess(familyGroupId: string, requester: JwtPayload): Promise<void> {
+    const resolved = await this.resolveFamilyGroupId(requester)
+    if (resolved !== familyGroupId) throw new ForbiddenException('Not a member of this family')
   }
 }

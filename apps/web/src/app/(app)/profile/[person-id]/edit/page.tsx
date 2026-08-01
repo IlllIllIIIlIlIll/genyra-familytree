@@ -44,8 +44,7 @@ export default function EditProfilePage() {
   const router        = useRouter()
   const personId      = params['person-id'] as string
   const familyGroupId = useAuthStore((s) => s.familyGroupId)
-  const authUserId    = useAuthStore((s) => s.userId)
-  const role          = useAuthStore((s) => s.role)
+  const currentNik    = useAuthStore((s) => s.nik)
   const toast         = useToastStore((s) => s.toast)
   const queryClient   = useQueryClient()
 
@@ -185,7 +184,7 @@ export default function EditProfilePage() {
     )
   }
 
-  const canEdit = node.userId === authUserId || role === 'FAMILY_HEAD'
+  const canEdit = node.nikId === currentNik
 
   if (!canEdit) {
     return (

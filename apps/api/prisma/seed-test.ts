@@ -1,71 +1,47 @@
 /**
- * seed-test.ts — Minimal test accounts for QA / manual testing.
+ * seed-test.ts — Minimal test data for QA / manual testing under the
+ * Google-OAuth + Admin/NikIdentity model.
  *
- * Creates a separate family group ("Test Family") with one account per role/status:
+ * Creates a separate "Test Family" owned by a test Admin account, with:
+ *   - one ACTIVE NikIdentity linked to a test personal account
+ *   - one DEACTIVATED NikIdentity (no linked account)
  *
- *   FAMILY_HEAD     NIK: 0000000000000001  password: testpass123
- *   FAMILY_MEMBER   NIK: 0000000000000002  password: testpass123
- *   DEACTIVATED     NIK: 0000000000000003  password: testpass123
- *   PENDING_APPROVAL NIK: 0000000000000004  password: testpass123
+ * Sign-in still requires real Google OAuth — these test rows only pre-provision
+ * the Account/NikIdentity/NikLink rows so a real Google login can "claim" them
+ * by email.
  *
  * Run: pnpm --filter @genyra/api db:seed:test
  */
 
 import { PrismaClient } from '@prisma/client'
-import * as argon2 from 'argon2'
 
 const prisma = new PrismaClient()
-const PASSWORD = 'testpass123'
+
+const TEST_ADMIN_EMAIL  = process.env['SEED_TEST_ADMIN_EMAIL']  ?? 'test-admin@example.com'
+const TEST_MEMBER_EMAIL = process.env['SEED_TEST_MEMBER_EMAIL'] ?? 'test-member@example.com'
 
 async function main() {
-  const hash = await argon2.hash(PASSWORD)
-
   // Clean up previous test data
   const existing = await prisma.familyGroup.findFirst({ where: { name: 'Test Family' } })
   if (existing) {
-    // Cascade: delete all PersonNodes (edges cascade), then FamilyGroup, then orphan Users
     const nodes = await prisma.personNode.findMany({ where: { familyGroupId: existing.id } })
-    for (const n of nodes) {
-      await prisma.personNode.delete({ where: { id: n.id } })
-    }
+    for (const n of nodes) await prisma.personNode.delete({ where: { id: n.id } })
     await prisma.familyGroup.delete({ where: { id: existing.id } })
-    await prisma.user.deleteMany({
-      where: { nik: { in: ['0000000000000001', '0000000000000002', '0000000000000003', '0000000000000004'] } },
-    })
   }
+  await prisma.nikIdentity.deleteMany({ where: { nik: { in: ['9000000000000001', '9000000000000002'] } } })
+  await prisma.account.deleteMany({ where: { email: { in: [TEST_ADMIN_EMAIL, TEST_MEMBER_EMAIL] } } })
 
-  // Create family
-  const family = await prisma.familyGroup.create({ data: { name: 'Test Family' } })
-
-  // FAMILY_HEAD
-  const head = await prisma.user.create({
-    data: {
-      nik:          '0000000000000001',
-      passwordHash: hash,
-      role:         'FAMILY_HEAD',
-      status:       'ACTIVE',
-      personNode: {
-        create: {
-          displayName:   'Test Head',
-          surname:       'Head',
-          gender:        'MALE',
-          birthDate:     new Date('1980-01-01'),
-          birthPlace:    'Jakarta',
-          familyGroupId: family.id,
-        },
-      },
-    },
-    include: { personNode: true },
+  const admin = await prisma.account.create({ data: { email: TEST_ADMIN_EMAIL, isAdmin: true } })
+  const family = await prisma.familyGroup.create({
+    data: { name: 'Test Family', adminAccountId: admin.id },
   })
 
-  // FAMILY_MEMBER (active)
-  const member = await prisma.user.create({
+  // ACTIVE member, pre-linked to a test personal account
+  await prisma.nikIdentity.create({
     data: {
-      nik:          '0000000000000002',
-      passwordHash: hash,
-      role:         'FAMILY_MEMBER',
-      status:       'ACTIVE',
-      personNode: {
+      nik:    '9000000000000001',
+      status: 'ACTIVE',
+      personNodes: {
         create: {
           displayName:   'Test Member',
           surname:       'Member',
@@ -76,26 +52,16 @@ async function main() {
         },
       },
     },
-    include: { personNode: true },
   })
+  const memberAccount = await prisma.account.create({ data: { email: TEST_MEMBER_EMAIL } })
+  await prisma.nikLink.create({ data: { accountId: memberAccount.id, nik: '9000000000000001' } })
 
-  // Link head and member as SPOUSE
-  await prisma.relationshipEdge.create({
+  // DEACTIVATED member, no linked account
+  await prisma.nikIdentity.create({
     data: {
-      sourceId:         head.personNode!.id,
-      targetId:         member.personNode!.id,
-      relationshipType: 'SPOUSE',
-    },
-  })
-
-  // DEACTIVATED member
-  await prisma.user.create({
-    data: {
-      nik:          '0000000000000003',
-      passwordHash: hash,
-      role:         'FAMILY_MEMBER',
-      status:       'DEACTIVATED',
-      personNode: {
+      nik:    '9000000000000002',
+      status: 'DEACTIVATED',
+      personNodes: {
         create: {
           displayName:   'Test Deactivated',
           surname:       'Deact',
@@ -108,41 +74,10 @@ async function main() {
     },
   })
 
-  // PENDING_APPROVAL member
-  const invite = await prisma.invite.create({
-    data: {
-      code:          'TEST0',
-      familyGroupId: family.id,
-      expiresAt:     new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    },
-  })
-  await prisma.user.create({
-    data: {
-      nik:          '0000000000000004',
-      passwordHash: hash,
-      role:         'FAMILY_MEMBER',
-      status:       'PENDING_APPROVAL',
-      personNode: {
-        create: {
-          displayName:    'Test Pending',
-          surname:        'Pending',
-          gender:         'FEMALE',
-          birthDate:      new Date('1995-09-10'),
-          birthPlace:     'Yogyakarta',
-          familyGroupId:  family.id,
-          pendingApproval: true,
-        },
-      },
-    },
-  })
-  await prisma.invite.update({ where: { id: invite.id }, data: { status: 'USED', usedAt: new Date() } })
-
-  console.log('\n✓ Test accounts created:')
-  console.log('  FAMILY_HEAD      NIK: 0000000000000001  password:', PASSWORD)
-  console.log('  FAMILY_MEMBER    NIK: 0000000000000002  password:', PASSWORD)
-  console.log('  DEACTIVATED      NIK: 0000000000000003  password:', PASSWORD, '(cannot login)')
-  console.log('  PENDING_APPROVAL NIK: 0000000000000004  password:', PASSWORD, '(cannot login until approved)')
-  console.log('\n  Family:', family.name, '| ID:', family.id)
+  console.log('\n✓ Test data created:')
+  console.log('  Test Family, admin account:', TEST_ADMIN_EMAIL, '(sign in with Google as this email to reach /admin)')
+  console.log('  ACTIVE NIK 9000000000000001, linked account:', TEST_MEMBER_EMAIL)
+  console.log('  DEACTIVATED NIK 9000000000000002, no linked account')
 }
 
 main()

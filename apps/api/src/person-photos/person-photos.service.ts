@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
+import type { JwtPayload } from '../common/decorators/current-user.decorator'
 import type { PersonPhoto } from '@genyra/shared-types'
 
 @Injectable()
@@ -22,7 +23,7 @@ export class PersonPhotosService {
       takenAt?: string | null
       sortOrder?: number
     },
-    requestingUserId: string,
+    requester: JwtPayload,
   ): Promise<PersonPhoto> {
     const PHOTO_LIMIT = 20
     const count = await this.prisma.personPhoto.count({ where: { personNodeId: data.personNodeId } })
@@ -43,13 +44,9 @@ export class PersonPhotosService {
       throw new BadRequestException('Image too large. Maximum file size is 5MB.')
     }
 
-    // C-06: Use PersonNode.role scoped to node's family (not User.role)
-    const requesterNode = await this.prisma.personNode.findFirst({
-      where: { userId: requestingUserId, ...(personNode.familyGroupId ? { familyGroupId: personNode.familyGroupId } : {}) },
-    })
-    const isSelf = personNode.userId === requestingUserId
-    const isFamilyHead = requesterNode?.role === 'FAMILY_HEAD'
-    if (!isSelf && !isFamilyHead) throw new ForbiddenException('You can only add photos to your own profile')
+    const isSelf  = !!requester.nik && personNode.nikId === requester.nik
+    const isAdmin = requester.isAdmin && await this.ownsFamily(requester.sub, personNode.familyGroupId)
+    if (!isSelf && !isAdmin) throw new ForbiddenException('You can only add photos to your own profile')
 
     const photo = await this.prisma.personPhoto.create({
       data: {
@@ -63,25 +60,27 @@ export class PersonPhotosService {
     return this.toDto(photo)
   }
 
-  async delete(id: string, requestingUserId: string): Promise<void> {
+  async delete(id: string, requester: JwtPayload): Promise<void> {
     const photo = await this.prisma.personPhoto.findUnique({
       where: { id },
-      include: { personNode: { select: { userId: true, familyGroupId: true } } },
+      include: { personNode: { select: { nikId: true, familyGroupId: true } } },
     })
     if (!photo) throw new NotFoundException('Photo not found')
 
-    // C-06: Use PersonNode.role scoped to node's family (not User.role)
-    const requesterNode = await this.prisma.personNode.findFirst({
-      where: { userId: requestingUserId, ...(photo.personNode.familyGroupId ? { familyGroupId: photo.personNode.familyGroupId } : {}) },
-    })
-    const isSelf = photo.personNode.userId === requestingUserId
-    const isFamilyHead = requesterNode?.role === 'FAMILY_HEAD'
+    const isSelf  = !!requester.nik && photo.personNode.nikId === requester.nik
+    const isAdmin = requester.isAdmin && await this.ownsFamily(requester.sub, photo.personNode.familyGroupId)
 
-    if (!isSelf && !isFamilyHead) {
+    if (!isSelf && !isAdmin) {
       throw new ForbiddenException('You can only delete your own photos')
     }
 
     await this.prisma.personPhoto.delete({ where: { id } })
+  }
+
+  private async ownsFamily(accountId: string, familyGroupId: string | null): Promise<boolean> {
+    if (!familyGroupId) return false
+    const group = await this.prisma.familyGroup.findUnique({ where: { adminAccountId: accountId } })
+    return group?.id === familyGroupId
   }
 
   private toDto(photo: {

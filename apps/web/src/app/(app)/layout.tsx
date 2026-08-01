@@ -31,40 +31,32 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
 
   const accessToken        = useAuthStore((s) => s.accessToken)
-  const familyGroupId      = useAuthStore((s) => s.familyGroupId)
-  const role               = useAuthStore((s) => s.role)
+  const isAdmin             = useAuthStore((s) => s.isAdmin)
   const isProfilePanelOpen = useMapUIStore((s) => s.isProfilePanelOpen)
   const isCleanView        = useMapUIStore((s) => s.isCleanView)
 
-  const isSetupPage   = pathname === '/setup'
-  const isJoinPage    = pathname === '/join'
-  const isOnboarding  = isSetupPage || isJoinPage
-  const isFamilyHead  = role === 'FAMILY_HEAD'
+  // Bottom nav (Map / Admin) is only relevant for admin accounts — regular
+  // members interact entirely through the map's own header.
+  const showNav = isAdmin && !isCleanView && !isProfilePanelOpen
 
-  // Nav visible only for FAMILY_HEAD on main app pages, hidden in clean view or when profile is open
-  const showNav = isFamilyHead && !!familyGroupId && !isOnboarding && !isCleanView && !isProfilePanelOpen
-
-  const { data: adminBadge } = useQuery({
-    queryKey: ['admin-badge'],
-    queryFn:  () => apiClient.getAdminBadge(),
-    enabled:  isFamilyHead && !!familyGroupId,
+  const { data: leaveRequests } = useQuery({
+    queryKey: ['leave-requests-badge'],
+    queryFn:  () => apiClient.admin.getLeaveRequests(),
+    enabled:  isAdmin,
     refetchInterval: 30_000,
+    retry: false,
   })
 
-  const pendingCount  = adminBadge?.pendingCount ?? 0
-  const inviteExpired = adminBadge?.inviteExpired ?? false
-  const badgeLabel    = pendingCount >= 10 ? '9+' : pendingCount > 0 ? String(pendingCount) : null
+  const pendingCount = leaveRequests?.length ?? 0
+  const badgeLabel   = pendingCount >= 10 ? '9+' : pendingCount > 0 ? String(pendingCount) : null
 
   useEffect(() => {
     if (!accessToken) {
       router.push('/login')
-    } else if (!familyGroupId && !isOnboarding) {
-      router.push('/setup')
     }
-  }, [accessToken, familyGroupId, isOnboarding, router])
+  }, [accessToken, router])
 
   if (!accessToken) return null
-  if (!familyGroupId && !isOnboarding) return null
 
   return (
     <div className="h-screen flex flex-col">
@@ -97,9 +89,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-0.5 flex items-center justify-center rounded-full bg-brand-500 text-white text-[10px] font-bold leading-none">
                   {badgeLabel}
                 </span>
-              )}
-              {inviteExpired && !badgeLabel && (
-                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 border border-white" />
               )}
             </div>
             <span>Admin</span>

@@ -19,6 +19,9 @@ apps/api/prisma/dev.db-journal
 .env.*.local
 !**/.env.example
 
+# OAuth client secrets
+client_secret_*.json
+
 # OS
 .DS_Store
 Thumbs.db
@@ -42,3 +45,4 @@ coverage/
 
 # TypeScript
 *.tsbuildinfo
+dev

@@ -17,7 +17,7 @@ interface ProfileCardProps {
 
 export function ProfileCard({ node, hasSpouse = false }: ProfileCardProps) {
   const router      = useRouter()
-  const authUserId  = useAuthStore((s) => s.userId)
+  const currentNik  = useAuthStore((s) => s.nik)
   const [showAddChild, setShowAddChild] = useState(false)
   const birthYear = node.birthDate ? new Date(node.birthDate).getFullYear() : null
   const deathYear = node.deathDate ? new Date(node.deathDate).getFullYear() : null
@@ -68,7 +68,7 @@ export function ProfileCard({ node, hasSpouse = false }: ProfileCardProps) {
         >
           View Full Profile
         </Button>
-        {node.userId === authUserId && hasSpouse && (
+        {node.nikId === currentNik && hasSpouse && (
           <Button variant="secondary" className="w-full" onClick={() => setShowAddChild(true)}>
             Add child
           </Button>

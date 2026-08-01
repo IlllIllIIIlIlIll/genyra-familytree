@@ -5,16 +5,16 @@ import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/store/map-store'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter()
-  const role   = useAuthStore((s) => s.role)
+  const router  = useRouter()
+  const isAdmin = useAuthStore((s) => s.isAdmin)
 
   useEffect(() => {
-    if (role && role !== 'FAMILY_HEAD') {
+    if (!isAdmin) {
       router.push('/map')
     }
-  }, [role, router])
+  }, [isAdmin, router])
 
-  if (role !== 'FAMILY_HEAD') return null
+  if (!isAdmin) return null
 
   return <>{children}</>
 }

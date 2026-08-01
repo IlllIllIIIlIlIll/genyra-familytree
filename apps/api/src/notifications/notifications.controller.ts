@@ -13,9 +13,9 @@ export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
   @Get('my-family')
-  @ApiOperation({ summary: 'Get notifications for current user\'s family group' })
+  @ApiOperation({ summary: "Get notifications for current session's family group" })
   async getForFamily(@CurrentUser() user: JwtPayload): Promise<Notification[]> {
-    return this.notificationsService.getForFamily(user.sub)
+    return this.notificationsService.getForFamily(user)
   }
 
   @Patch(':id/read')
@@ -25,7 +25,7 @@ export class NotificationsController {
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<void> {
-    return this.notificationsService.markRead(id, user.sub)
+    return this.notificationsService.markRead(id, user)
   }
 
   @Delete(':id')
@@ -35,6 +35,6 @@ export class NotificationsController {
     @Param('id') id: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<void> {
-    return this.notificationsService.dismiss(id, user.sub)
+    return this.notificationsService.dismiss(id, user)
   }
 }

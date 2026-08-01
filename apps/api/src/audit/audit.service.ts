@@ -7,7 +7,7 @@ export class AuditService {
 
   async log(params: {
     familyGroupId: string
-    actorUserId: string
+    actorAccountId: string
     action: string
     targetId?: string
     details?: string

@@ -33,7 +33,9 @@
       "Bash(npx tsc:*)",
       "Bash(1:*)",
       "Bash(\"C:/Users/Lenovo/Documents/GitHub/genyra-familytree/README.md\":*)",
-      "Bash(npx nest:*)"
+      "Bash(npx nest:*)",
+      "Bash(git -C \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\genyra-familytree\" status --porcelain -- client_secret_705752133305-9h1m52rce0d7ko755c769nct531igjut.apps.googleusercontent.com.json)",
+      "Bash(git -C \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\genyra-familytree\" log --all --oneline -- \"client_secret_*.json\")"
     ]
   }
 }

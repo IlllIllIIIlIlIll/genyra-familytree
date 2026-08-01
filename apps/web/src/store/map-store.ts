@@ -34,12 +34,13 @@ export const useToastStore = create<ToastState>()((set) => ({
 interface AuthState {
   accessToken: string | null
   refreshToken: string | null
-  userId: string | null
+  accountId: string | null
+  isAdmin: boolean
+  nik: string | null
   familyGroupId: string | null
-  role: string | null
   families: FamilySummary[]
   setTokens: (tokens: { accessToken: string; refreshToken: string }) => void
-  setUser: (user: { userId: string; familyGroupId: string | null; role: string }) => void
+  setUser: (user: { accountId: string; isAdmin: boolean; nik: string | null; familyGroupId: string | null }) => void
   setFamilyGroupId: (id: string) => void
   setFamilies: (families: FamilySummary[]) => void
   clear: () => void
@@ -50,23 +51,25 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       accessToken: null,
       refreshToken: null,
-      userId: null,
+      accountId: null,
+      isAdmin: false,
+      nik: null,
       familyGroupId: null,
-      role: null,
       families: [],
       setTokens: (tokens) =>
         set({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }),
       setUser: (user) =>
-        set({ userId: user.userId, familyGroupId: user.familyGroupId, role: user.role }),
+        set({ accountId: user.accountId, isAdmin: user.isAdmin, nik: user.nik, familyGroupId: user.familyGroupId }),
       setFamilyGroupId: (id) => set({ familyGroupId: id }),
       setFamilies: (families) => set({ families }),
       clear: () =>
         set({
           accessToken: null,
           refreshToken: null,
-          userId: null,
+          accountId: null,
+          isAdmin: false,
+          nik: null,
           familyGroupId: null,
-          role: null,
           families: [],
         }),
     }),

@@ -2,9 +2,10 @@ import { createParamDecorator, ExecutionContext } from '@nestjs/common'
 import type { FastifyRequest } from 'fastify'
 
 export interface JwtPayload {
-  sub: string
-  role: string
-  fid: string
+  sub:     string
+  isAdmin: boolean
+  nik?:    string
+  fid?:    string
 }
 
 export const CurrentUser = createParamDecorator(

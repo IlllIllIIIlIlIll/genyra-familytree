@@ -151,9 +151,9 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   const setUser       = useAuthStore((s) => s.setUser)
   const setFamilies   = useAuthStore((s) => s.setFamilies)
   const families      = useAuthStore((s) => s.families)
-  const currentUserId = useAuthStore((s) => s.userId)
-  const role          = useAuthStore((s) => s.role)
-  const isFamilyHead  = role === 'FAMILY_HEAD'
+  const currentNik    = useAuthStore((s) => s.nik)
+  const accountId     = useAuthStore((s) => s.accountId)
+  const isAdmin       = useAuthStore((s) => s.isAdmin)
   const canvasRef     = useRef<HTMLDivElement>(null)
   const longPressTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
   const longPressNodeId = useRef<string | null>(null)
@@ -163,15 +163,13 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   const [isNotifPanelOpen, setIsNotifPanelOpen]       = useState(false)
   const [isDownloading, setIsDownloading]             = useState(false)
   const [isFamilySwitcherOpen, setIsFamilySwitcherOpen] = useState(false)
-  const [joinFamilyOpen, setJoinFamilyOpen]             = useState(false)
-  const [joinInviteCode, setJoinInviteCode]             = useState('')
   const [genOffset, setGenOffset]                       = useState(0)
   const toast = useToastStore((s) => s.toast)
 
   const GEN_WINDOW = 4
 
   // Notification last-read timestamp stored per user in localStorage
-  const notifKey = currentUserId ? `notif_last_read_${currentUserId}` : null
+  const notifKey = currentNik ? `notif_last_read_${currentNik}` : (accountId ? `notif_last_read_${accountId}` : null)
   const getLastRead = useCallback((): number => {
     if (!notifKey) return 0
     return Number(localStorage.getItem(notifKey) ?? 0)
@@ -180,7 +178,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications'],
     queryFn:  () => apiClient.getNotifications(),
-    enabled:  !!currentUserId,
+    enabled:  !!accountId,
     refetchInterval: 30_000,
   })
 
@@ -201,7 +199,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   const { data: fetchedFamilies } = useQuery({
     queryKey: ['my-families'],
     queryFn:  () => apiClient.getMyFamilies(),
-    enabled:  !!currentUserId,
+    enabled:  !!currentNik,
   })
 
   useEffect(() => {
@@ -211,10 +209,10 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   const switchFamilyMutation = useMutation({
     mutationFn: (fid: string) => apiClient.switchFamily(fid),
     onSuccess: (tokens) => {
-      const payload = JSON.parse(atob(tokens.accessToken.split('.')[1]!)) as { sub: string; role: string; fid: string }
+      const payload = JSON.parse(atob(tokens.accessToken.split('.')[1]!)) as { sub: string; isAdmin: boolean; nik?: string; fid?: string }
       saveTokens(tokens.accessToken, tokens.refreshToken)
       setTokens(tokens)
-      setUser({ userId: payload.sub, familyGroupId: payload.fid, role: payload.role })
+      setUser({ accountId: payload.sub, isAdmin: payload.isAdmin, nik: payload.nik ?? null, familyGroupId: payload.fid ?? null })
       void queryClient.invalidateQueries({ queryKey: ['map-data'] })
       void queryClient.invalidateQueries({ queryKey: ['notifications'] })
       setIsFamilySwitcherOpen(false)
@@ -225,21 +223,6 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
     mutationFn: (id: string) => apiClient.dismissNotification(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['notifications'] })
-    },
-  })
-
-  const joinAdditionalMutation = useMutation({
-    mutationFn: (code: string) => apiClient.joinAdditionalFamily(code),
-    onSuccess: (res) => {
-      toast(res.message, 'success')
-      setJoinFamilyOpen(false)
-      setJoinInviteCode('')
-      setIsFamilySwitcherOpen(false)
-      void queryClient.invalidateQueries({ queryKey: ['my-families'] })
-    },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to join family'
-      toast(msg, 'error')
     },
   })
 
@@ -333,7 +316,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
         : (positions.get(n.id) ?? { x: 0, y: 0 })
       return {
         id: n.id, type: 'personNode', position: pos,
-        data: { node: n, isCurrentUser: n.userId === currentUserId } satisfies PersonNodeData,
+        data: { node: n, isCurrentUser: n.nikId === currentNik } satisfies PersonNodeData,
         draggable: true,
       }
     })
@@ -377,7 +360,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   // layoutVersion forces re-layout even when mapData hasn't changed (drag reset).
   // genOffset triggers a new layout when the generation window slides.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredMapData, layoutVersion, setNodes, setRawEdges, currentUserId, fitView])
+  }, [filteredMapData, layoutVersion, setNodes, setRawEdges, currentNik, fitView])
 
   const handleNodesChange = useCallback(
     (changes: NodeChange<Node<FlowNodeData>>[]) => {
@@ -450,7 +433,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   )
 
   const updateNameMutation = useMutation({
-    mutationFn: (name: string) => apiClient.updateFamilyName(familyGroupId, name),
+    mutationFn: (name: string) => apiClient.admin.updateFamily(name),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['map-data', familyGroupId] })
       setIsEditingName(false)
@@ -478,7 +461,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   }, [queryClient, familyGroupId])
 
   // Navigate to the current user's person node, centred and zoomed.
-  const currentUserPersonNode = mapData?.nodes.find((n) => n.userId === currentUserId)
+  const currentUserPersonNode = mapData?.nodes.find((n) => n.nikId === currentNik)
   const handleViewCurrentUser = useCallback(() => {
     if (!currentUserPersonNode) return
     const rfNode = getNode(currentUserPersonNode.id)
@@ -583,7 +566,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
   return (
     // touch-action: none overrides `html { touch-action: manipulation }` in globals.css
     // which would otherwise swallow React Flow's pointer drag events on touch screens.
-    <div className={`flex-1 flex flex-col ${isFamilyHead ? 'pb-14' : ''}`} style={{ touchAction: 'none' }}>
+    <div className={`flex-1 flex flex-col ${isAdmin ? 'pb-14' : ''}`} style={{ touchAction: 'none' }}>
 
       {/* ── Family header bar (hidden in clean view) ────────────────────────── */}
       {!isCleanView && (
@@ -614,7 +597,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
                 <span className="text-sm font-semibold text-slate-700 truncate">
                   {mapData?.familyName ?? 'Family Map'}
                 </span>
-                {isFamilyHead && (
+                {isAdmin && (
                   <button
                     onClick={() => { setNameDraft(mapData?.familyName ?? ''); setIsEditingName(true) }}
                     className="p-1 rounded text-slate-300 hover:text-slate-500 transition-colors shrink-0"
@@ -638,60 +621,21 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
                   </button>
                   {isFamilySwitcherOpen && (
                     <>
-                      <div className="fixed inset-0 z-[40]" onClick={() => { setIsFamilySwitcherOpen(false); setJoinFamilyOpen(false) }} />
+                      <div className="fixed inset-0 z-[40]" onClick={() => setIsFamilySwitcherOpen(false)} />
                       <div className="absolute left-0 top-7 z-[41] w-56 bg-white rounded-xl shadow-lg border border-stone-100 py-1 overflow-hidden">
-                        {families.map((f) => (
-                          <button
-                            key={f.id}
-                            disabled={f.id === familyGroupId || switchFamilyMutation.isPending}
-                            onClick={() => switchFamilyMutation.mutate(f.id)}
-                            className="w-full text-left px-3 py-2.5 text-sm hover:bg-stone-50 disabled:opacity-50 flex items-center justify-between gap-2"
-                          >
-                            <span className="truncate font-medium text-slate-700">{f.name}</span>
-                            <span className="text-[10px] text-slate-400 shrink-0 uppercase tracking-wide">{f.role === 'FAMILY_HEAD' ? 'Head' : 'Member'}</span>
-                          </button>
-                        ))}
-                        {families.length < 3 && (
-                          <>
-                            {families.length > 0 && <div className="border-t border-stone-100 mx-2 my-1" />}
-                            {!joinFamilyOpen ? (
-                              <button
-                                onClick={() => setJoinFamilyOpen(true)}
-                                className="w-full text-left px-3 py-2.5 text-sm text-brand-600 hover:bg-brand-50 flex items-center gap-2"
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 shrink-0">
-                                  <path d="M10.75 4.75a.75.75 0 0 0-1.5 0v4.5h-4.5a.75.75 0 0 0 0 1.5h4.5v4.5a.75.75 0 0 0 1.5 0v-4.5h4.5a.75.75 0 0 0 0-1.5h-4.5v-4.5Z" />
-                                </svg>
-                                Join another family
-                              </button>
-                            ) : (
-                              <div className="px-3 py-2 space-y-2">
-                                <input
-                                  autoFocus
-                                  value={joinInviteCode}
-                                  onChange={(e) => setJoinInviteCode(e.target.value.toUpperCase())}
-                                  placeholder="Invite code"
-                                  autoCapitalize="characters"
-                                  className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-brand-400 font-mono tracking-wider"
-                                />
-                                <div className="flex gap-1.5">
-                                  <button
-                                    onClick={() => joinAdditionalMutation.mutate(joinInviteCode)}
-                                    disabled={!joinInviteCode || joinAdditionalMutation.isPending}
-                                    className="flex-1 py-1.5 text-xs font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 disabled:opacity-50"
-                                  >
-                                    {joinAdditionalMutation.isPending ? 'Joining…' : 'Join'}
-                                  </button>
-                                  <button
-                                    onClick={() => { setJoinFamilyOpen(false); setJoinInviteCode('') }}
-                                    className="flex-1 py-1.5 text-xs font-medium bg-stone-100 text-slate-600 rounded-lg hover:bg-stone-200"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                          </>
+                        {families.length === 0 ? (
+                          <p className="px-3 py-2.5 text-xs text-slate-400">No other families.</p>
+                        ) : (
+                          families.map((f) => (
+                            <button
+                              key={f.id}
+                              disabled={f.id === familyGroupId || switchFamilyMutation.isPending}
+                              onClick={() => switchFamilyMutation.mutate(f.id)}
+                              className="w-full text-left px-3 py-2.5 text-sm hover:bg-stone-50 disabled:opacity-50 flex items-center justify-between gap-2"
+                            >
+                              <span className="truncate font-medium text-slate-700">{f.name}</span>
+                            </button>
+                          ))
                         )}
                       </div>
                     </>
@@ -809,7 +753,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
 
           {/* ── Generation navigation pill ───────────────────────────────── */}
           {!isCleanView && totalGenerations > GEN_WINDOW && (
-            <Panel position="bottom-center" style={{ bottom: isFamilyHead ? 72 : 16 }}>
+            <Panel position="bottom-center" style={{ bottom: isAdmin ? 72 : 16 }}>
               <div className="flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-full shadow-md border border-stone-200 px-1 py-1">
                 <button
                   onClick={() => { setGenOffset((o) => o + 1) }}
