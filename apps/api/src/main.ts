@@ -12,8 +12,10 @@ async function bootstrap(): Promise<void> {
     new FastifyAdapter(),
   )
 
+  const frontendUrl = (process.env['FRONTEND_URL'] ?? 'http://localhost:3000').replace(/\/+$/, '')
+
   app.enableCors({
-    origin:  process.env['FRONTEND_URL'] ?? 'http://localhost:3000',
+    origin:  frontendUrl,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,

@@ -41,7 +41,7 @@ export class AuthController {
     @Res() reply: FastifyReply,
   ): Promise<void> {
     const code = await this.authService.handleGoogleLogin(profile as GoogleProfile)
-    const frontendUrl = process.env['FRONTEND_URL'] ?? 'http://localhost:3000'
+    const frontendUrl = (process.env['FRONTEND_URL'] ?? 'http://localhost:3000').replace(/\/+$/, '')
     reply.redirect(`${frontendUrl}/auth/callback?code=${encodeURIComponent(code)}`, 302)
   }
 
