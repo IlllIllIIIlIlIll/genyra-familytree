@@ -2,9 +2,8 @@ services:
   - type: web
     name: genyra-api
     runtime: node
-    rootDir: apps/api
-    buildCommand: npm install -g pnpm@10 && pnpm install --frozen-lockfile && pnpm prisma:generate && pnpm prisma:migrate:deploy && pnpm build
-    startCommand: node dist/main
+    buildCommand: npm install -g pnpm@10 && pnpm install --frozen-lockfile && pnpm --filter @genyra/api prisma:generate && pnpm --filter @genyra/api prisma:migrate:deploy && pnpm --filter @genyra/api build
+    startCommand: node apps/api/dist/main.js
     healthCheckPath: /api
     envVars:
       - key: NODE_ENV
