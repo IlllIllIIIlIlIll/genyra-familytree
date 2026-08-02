@@ -36,7 +36,10 @@
       "Bash(npx nest:*)",
       "Bash(git -C \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\genyra-familytree\" status --porcelain -- client_secret_705752133305-9h1m52rce0d7ko755c769nct531igjut.apps.googleusercontent.com.json)",
       "Bash(git -C \"C:\\\\Users\\\\Lenovo\\\\Documents\\\\GitHub\\\\genyra-familytree\" log --all --oneline -- \"client_secret_*.json\")",
-      "WebSearch"
+      "WebSearch",
+      "Bash(curl -s -o /dev/null -w \"genyra.onrender.com/auth/google -> %{http_code}\\\\n\" \"https://genyra.onrender.com/auth/google\")",
+      "Bash(curl -s -o /dev/null -w \"genyra.onrender.com/api/auth/google -> %{http_code}\\\\n\" \"https://genyra.onrender.com/api/auth/google\")",
+      "Bash(curl -s \"https://genyra.onrender.com/api\")"
     ]
   }
 }
