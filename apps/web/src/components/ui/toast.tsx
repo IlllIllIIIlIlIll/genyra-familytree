@@ -4,7 +4,7 @@ import { useToastStore, type ToastType } from '@/store/map-store'
 import { cn } from '@/lib/utils'
 
 const STRIPE: Record<ToastType, string> = {
-  neutral: 'bg-slate-400',
+  neutral: 'bg-slate-400 dark:bg-stone-500',
   success: 'bg-green-500',
   error:   'bg-red-500',
 }
@@ -23,14 +23,14 @@ export function ToastContainer() {
           onClick={() => dismiss(t.id)}
           className={cn(
             'pointer-events-auto flex items-stretch overflow-hidden',
-            'rounded-lg shadow-lg bg-white border border-slate-100',
+            'rounded-lg shadow-lg bg-white dark:bg-stone-900 border border-slate-100 dark:border-stone-800',
             'min-w-[220px] max-w-[320px] text-left',
             'animate-toast-in',
           )}
         >
           {/* Coloured stripe on the left */}
           <div className={cn('w-1.5 shrink-0', STRIPE[t.type])} />
-          <p className="px-3 py-2.5 text-sm text-slate-700 flex-1 leading-snug">
+          <p className="px-3 py-2.5 text-sm text-slate-700 dark:text-stone-200 flex-1 leading-snug">
             {t.message}
           </p>
         </button>

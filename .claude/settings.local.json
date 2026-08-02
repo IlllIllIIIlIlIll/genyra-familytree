@@ -39,7 +39,15 @@
       "WebSearch",
       "Bash(curl -s -o /dev/null -w \"genyra.onrender.com/auth/google -> %{http_code}\\\\n\" \"https://genyra.onrender.com/auth/google\")",
       "Bash(curl -s -o /dev/null -w \"genyra.onrender.com/api/auth/google -> %{http_code}\\\\n\" \"https://genyra.onrender.com/api/auth/google\")",
-      "Bash(curl -s \"https://genyra.onrender.com/api\")"
+      "Bash(curl -s \"https://genyra.onrender.com/api\")",
+      "Bash(npx ts-node *)",
+      "Bash(netstat -ano)",
+      "Bash(curl -s -o - -w '\\\\nHTTP_STATUS:%{http_code}\\\\n' http://localhost:3001/admin/family -H 'Authorization: Bearer __CMDSUB_OUTPUT__')",
+      "Bash(curl -s -o /dev/null -w \"port3000: %{http_code}\\\\n\" http://localhost:3000/login)",
+      "Bash(curl -s -o /dev/null -w \"port3001: %{http_code}\\\\n\" http://localhost:3001/login)",
+      "Bash(taskkill //F //PID 20796 //T)",
+      "Bash(taskkill //F //PID 19544 //T)",
+      "Bash(curl -s -o /dev/null -w \"\\\\napi: %{http_code}\\\\n\" http://localhost:3001/api)"
     ]
   }
 }

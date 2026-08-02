@@ -39,10 +39,16 @@ interface AuthState {
   nik: string | null
   familyGroupId: string | null
   families: FamilySummary[]
+  // True once zustand-persist has finished reading localStorage. Callers that
+  // redirect based on `accessToken === null` must wait for this — otherwise
+  // a logged-in user gets bounced to /login on every hard refresh, since the
+  // very first render happens before persisted state has loaded.
+  hasHydrated: boolean
   setTokens: (tokens: { accessToken: string; refreshToken: string }) => void
   setUser: (user: { accountId: string; isAdmin: boolean; nik: string | null; familyGroupId: string | null }) => void
   setFamilyGroupId: (id: string) => void
   setFamilies: (families: FamilySummary[]) => void
+  setHasHydrated: (value: boolean) => void
   clear: () => void
 }
 
@@ -56,12 +62,14 @@ export const useAuthStore = create<AuthState>()(
       nik: null,
       familyGroupId: null,
       families: [],
+      hasHydrated: false,
       setTokens: (tokens) =>
         set({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }),
       setUser: (user) =>
         set({ accountId: user.accountId, isAdmin: user.isAdmin, nik: user.nik, familyGroupId: user.familyGroupId }),
       setFamilyGroupId: (id) => set({ familyGroupId: id }),
       setFamilies: (families) => set({ families }),
+      setHasHydrated: (value) => set({ hasHydrated: value }),
       clear: () =>
         set({
           accessToken: null,
@@ -73,7 +81,12 @@ export const useAuthStore = create<AuthState>()(
           families: [],
         }),
     }),
-    { name: 'genyra-auth' },
+    {
+      name: 'genyra-auth',
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true)
+      },
+    },
   ),
 )
 

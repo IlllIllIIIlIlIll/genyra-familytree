@@ -65,13 +65,17 @@ export const AVATAR_PX = {
 export const TAP_MIN_PX = 44
 
 // ─── Colours (inline — only use where Tailwind classes are not possible) ──────
+// Values are CSS custom properties (defined in globals.css) so every colour
+// here follows the active accent theme (`data-theme`) and light/dark mode
+// (`.dark`) automatically — no JS-side recomputation needed.
 export const COLOR = {
-  EDGE_SPOUSE:        '#94a3b8',
-  EDGE_PARENT_CHILD:  '#e8829a',
-  EDGE_SIBLING:       '#d4a0b0',
-  EDGE_JUNCTION:      '#e8829a',
-  EDGE_HIGHLIGHT:     '#f43f5e',  // rose-500 — highlighted edge/connection
-  MAP_GRID_DOT:       '#c4a882',  // warm sand — matches linen canvas bg
-  MINIMAP_NODE:       '#e8829a',
-  MINIMAP_MASK:       'rgba(248, 240, 242, 0.7)',
+  EDGE_SPOUSE:        'var(--color-edge-spouse)',
+  EDGE_PARENT_CHILD:  'var(--color-edge-parent-child)',
+  EDGE_SIBLING:       'var(--color-edge-sibling)',
+  EDGE_JUNCTION:      'var(--color-edge-junction)',
+  EDGE_HIGHLIGHT:     'var(--color-edge-highlight)',
+  MAP_GRID_DOT:       'var(--color-map-grid-dot)',
+  MINIMAP_NODE:       'var(--color-minimap-node)',
+  MINIMAP_MASK:       'var(--color-minimap-mask)',
+  CANVAS_BG:          'var(--color-canvas-bg)',
 } as const

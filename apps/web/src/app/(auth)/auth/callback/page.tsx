@@ -111,7 +111,7 @@ function CallbackContent() {
     return (
       <div className="text-center">
         <div className="animate-spin h-10 w-10 rounded-full border-2 border-brand-400 border-t-transparent mx-auto mb-3" />
-        <p className="text-sm text-slate-400">Signing you in…</p>
+        <p className="text-sm text-slate-500 dark:text-stone-400">Signing you in…</p>
       </div>
     )
   }
@@ -119,9 +119,9 @@ function CallbackContent() {
   if (status === 'no-access') {
     return (
       <div className="w-full max-w-sm text-center">
-        <div className="bg-white rounded-2xl shadow-sm border border-brand-100 p-8">
-          <h1 className="text-xl font-semibold text-slate-800 mb-2">No family access yet</h1>
-          <p className="text-sm text-slate-500 leading-relaxed">
+        <div className="bg-white dark:bg-stone-900 rounded-2xl shadow-sm border border-brand-100 dark:border-stone-800 p-8">
+          <h1 className="text-xl font-semibold text-slate-800 dark:text-stone-100 mb-2">No family access yet</h1>
+          <p className="text-sm text-slate-500 dark:text-stone-400 leading-relaxed">
             Your Google account isn&apos;t linked to a family member yet. Ask your family admin
             to link your email to your NIK to get access.
           </p>
@@ -133,9 +133,9 @@ function CallbackContent() {
   if (status === 'error') {
     return (
       <div className="w-full max-w-sm text-center">
-        <div className="bg-white rounded-2xl shadow-sm border border-red-100 p-8">
-          <h1 className="text-xl font-semibold text-slate-800 mb-2">Sign-in failed</h1>
-          <p className="text-sm text-slate-500 leading-relaxed">
+        <div className="bg-white dark:bg-stone-900 rounded-2xl shadow-sm border border-red-100 dark:border-red-900 p-8">
+          <h1 className="text-xl font-semibold text-slate-800 dark:text-stone-100 mb-2">Sign-in failed</h1>
+          <p className="text-sm text-slate-500 dark:text-stone-400 leading-relaxed">
             Something went wrong signing you in. Please go back and try again.
           </p>
         </div>
@@ -147,13 +147,13 @@ function CallbackContent() {
   return (
     <div className="w-full max-w-sm">
       <div className="text-center mb-6">
-        <h1 className="text-xl font-semibold text-slate-800">Choose your profile</h1>
-        <p className="text-sm text-slate-500 mt-1">Select who you are and which family to enter</p>
+        <h1 className="text-xl font-semibold text-slate-800 dark:text-stone-100">Choose your profile</h1>
+        <p className="text-sm text-slate-500 dark:text-stone-400 mt-1">Select who you are and which family to enter</p>
       </div>
       <div className="space-y-3">
         {exchange?.personas.map((persona: NikPersona) => (
-          <div key={persona.nik} className="bg-white rounded-2xl border border-stone-100 shadow-sm p-4">
-            <p className="font-semibold text-slate-800 text-sm mb-2">{persona.displayName}</p>
+          <div key={persona.nik} className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-100 dark:border-stone-800 shadow-sm p-4">
+            <p className="font-semibold text-slate-800 dark:text-stone-100 text-sm mb-2">{persona.displayName}</p>
             <div className="space-y-1.5">
               {persona.families.map((f) => (
                 <button
@@ -161,7 +161,7 @@ function CallbackContent() {
                   type="button"
                   onClick={() => handleSelectFamily(persona.nik, f.id)}
                   disabled={selectNikMutation.isPending}
-                  className="w-full text-left px-3 py-2 text-sm bg-stone-50 hover:bg-brand-50 rounded-xl text-slate-700 transition-colors disabled:opacity-50"
+                  className="w-full text-left px-3 py-2 text-sm bg-stone-50 dark:bg-stone-800 hover:bg-brand-50 dark:hover:bg-stone-700 rounded-xl text-slate-700 dark:text-stone-200 transition-colors disabled:opacity-50"
                 >
                   {f.name}
                   {selectNikMutation.isPending && pendingNik === persona.nik ? ' …' : ''}
@@ -177,7 +177,7 @@ function CallbackContent() {
 
 export default function AuthCallbackPage() {
   return (
-    <main className="min-h-screen flex items-center justify-center p-4 bg-brand-50">
+    <main className="min-h-dvh flex items-center justify-center p-4 bg-brand-50 dark:bg-stone-950">
       <Suspense>
         <CallbackContent />
       </Suspense>

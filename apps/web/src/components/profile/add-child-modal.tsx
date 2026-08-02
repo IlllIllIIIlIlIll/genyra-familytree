@@ -39,11 +39,11 @@ export function AddChildModal({ onClose }: Props) {
   return (
     <div className="fixed inset-0 z-[9998] flex items-end justify-center bg-black/60" onClick={onClose}>
       <div
-        className="w-full max-w-lg bg-white rounded-t-3xl p-6 pb-10 space-y-4 overflow-y-auto max-h-[90vh]"
+        className="w-full max-w-lg bg-white dark:bg-stone-900 rounded-t-3xl p-6 pb-10 space-y-4 overflow-y-auto max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-base font-semibold text-slate-800">Add newborn child</h2>
-        <p className="text-xs text-slate-400">
+        <h2 className="text-base font-semibold text-slate-800 dark:text-stone-100">Add newborn child</h2>
+        <p className="text-xs text-slate-500 dark:text-stone-400">
           The child will appear on the family map immediately. Your family admin can link a
           Google account to their NIK later so they can sign in.
         </p>
@@ -58,7 +58,7 @@ export function AddChildModal({ onClose }: Props) {
           />
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-slate-700">Gender</label>
+            <label className="text-sm font-medium text-slate-700 dark:text-stone-200">Gender</label>
             <Controller
               name="gender"
               control={control}
@@ -72,8 +72,8 @@ export function AddChildModal({ onClose }: Props) {
                       className={cn(
                         'flex-1 py-2 rounded-xl border text-sm font-medium transition-colors',
                         field.value === g
-                          ? g === 'MALE' ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-rose-50 border-rose-300 text-rose-700'
-                          : 'bg-white border-stone-200 text-slate-500 hover:bg-stone-50',
+                          ? g === 'MALE' ? 'bg-sky-50 dark:bg-sky-950 border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-300' : 'bg-rose-50 dark:bg-rose-950 border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300'
+                          : 'bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-700 text-slate-500 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800',
                       )}
                     >
                       {g === 'MALE' ? '♂ Male' : '♀ Female'}
@@ -82,7 +82,7 @@ export function AddChildModal({ onClose }: Props) {
                 </div>
               )}
             />
-            {errors.gender && <p className="text-xs text-red-500">{errors.gender.message}</p>}
+            {errors.gender && <p className="text-xs text-red-500 dark:text-red-400">{errors.gender.message}</p>}
           </div>
 
           <Input

@@ -24,9 +24,9 @@ export function Button({
         {
           'bg-brand-500 text-white hover:bg-brand-600 active:bg-brand-700':
             variant === 'primary',
-          'bg-slate-100 text-slate-700 hover:bg-slate-200 active:bg-slate-300':
+          'bg-slate-100 dark:bg-stone-800 text-slate-700 dark:text-stone-200 hover:bg-slate-200 dark:hover:bg-stone-700 active:bg-slate-300 dark:active:bg-stone-600':
             variant === 'secondary',
-          'text-slate-600 hover:bg-slate-100 active:bg-slate-200':
+          'text-slate-600 dark:text-stone-300 hover:bg-slate-100 dark:hover:bg-stone-800 active:bg-slate-200 dark:active:bg-stone-700':
             variant === 'ghost',
           'bg-red-500 text-white hover:bg-red-600': variant === 'danger',
         },

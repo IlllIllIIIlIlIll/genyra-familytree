@@ -32,6 +32,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const accessToken        = useAuthStore((s) => s.accessToken)
   const isAdmin             = useAuthStore((s) => s.isAdmin)
+  const hasHydrated        = useAuthStore((s) => s.hasHydrated)
   const isProfilePanelOpen = useMapUIStore((s) => s.isProfilePanelOpen)
   const isCleanView        = useMapUIStore((s) => s.isCleanView)
 
@@ -51,25 +52,33 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const badgeLabel   = pendingCount >= 10 ? '9+' : pendingCount > 0 ? String(pendingCount) : null
 
   useEffect(() => {
-    if (!accessToken) {
+    // Wait for the persisted store to finish loading from localStorage before
+    // deciding the user is logged out — otherwise every hard refresh bounces
+    // a logged-in user to /login during the brief window before hydration.
+    if (hasHydrated && !accessToken) {
       router.push('/login')
     }
-  }, [accessToken, router])
+  }, [hasHydrated, accessToken, router])
 
-  if (!accessToken) return null
+  if (!hasHydrated || !accessToken) return null
 
   return (
-    <div className="h-screen flex flex-col">
+    // h-dvh (dynamic viewport height) instead of h-screen (100vh): on mobile
+    // browsers, 100vh is measured against the viewport with the address bar
+    // collapsed, so the app shell either overflows or leaves a blank gap
+    // below the fixed bottom nav as the browser chrome shows/hides. dvh
+    // tracks the *actual* visible viewport so the shell always fills it.
+    <div className="h-dvh flex flex-col">
       {children}
 
       {showNav && (
-        <nav className="fixed bottom-0 inset-x-0 z-[9990] flex items-center justify-around bg-white/95 backdrop-blur border-t border-stone-200"
+        <nav className="fixed bottom-0 inset-x-0 z-[9990] flex items-center justify-around bg-white/95 dark:bg-stone-900/95 backdrop-blur border-t border-stone-200 dark:border-stone-800"
              style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
           <Link
             href="/map"
             className={cn(
               'flex flex-col items-center gap-0.5 px-8 py-3 text-xs font-medium transition-colors',
-              pathname === '/map' ? 'text-brand-600' : 'text-slate-400 hover:text-slate-600',
+              pathname === '/map' ? 'text-brand-600' : 'text-slate-500 dark:text-stone-400 hover:text-slate-700 dark:hover:text-stone-200',
             )}
           >
             <MapIcon />
@@ -80,7 +89,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             href="/admin"
             className={cn(
               'relative flex flex-col items-center gap-0.5 px-8 py-3 text-xs font-medium transition-colors',
-              pathname.startsWith('/admin') ? 'text-brand-600' : 'text-slate-400 hover:text-slate-600',
+              pathname.startsWith('/admin') ? 'text-brand-600' : 'text-slate-500 dark:text-stone-400 hover:text-slate-700 dark:hover:text-stone-200',
             )}
           >
             <div className="relative">

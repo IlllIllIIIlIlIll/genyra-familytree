@@ -31,20 +31,20 @@ export default function AdminMembersPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-stone-50 overflow-y-auto pb-20 min-h-screen">
+    <div className="flex-1 flex flex-col bg-stone-50 dark:bg-stone-950 overflow-y-auto pb-20 min-h-dvh">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-4 bg-white border-b border-stone-100 sticky top-0 z-10">
+      <div className="flex items-center gap-3 px-4 py-4 bg-white dark:bg-stone-900 border-b border-stone-100 dark:border-stone-800 sticky top-0 z-10">
         <button
           type="button"
           onClick={() => router.back()}
           aria-label="Back"
-          className="flex items-center justify-center w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-slate-500 hover:text-slate-700 transition-colors"
+          className="flex items-center justify-center w-8 h-8 rounded-full bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-slate-500 dark:text-stone-400 hover:text-slate-700 dark:hover:text-stone-200 transition-colors"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
             <path fillRule="evenodd" d="M11.78 5.22a.75.75 0 0 1 0 1.06L8.06 10l3.72 3.72a.75.75 0 1 1-1.06 1.06l-4.25-4.25a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 0Z" clipRule="evenodd" />
           </svg>
         </button>
-        <h1 className={cn(FONT.HEADING_SM, 'font-semibold text-slate-700 flex-1')}>Members</h1>
+        <h1 className={cn(FONT.HEADING_SM, 'font-semibold text-slate-700 dark:text-stone-200 flex-1')}>Members</h1>
         <button
           onClick={() => setShowAddForm((v) => !v)}
           className="px-3 py-1.5 text-xs font-medium bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition-colors"
@@ -65,7 +65,7 @@ export default function AdminMembersPage() {
             <div className="animate-spin h-8 w-8 rounded-full border-2 border-brand-400 border-t-transparent" />
           </div>
         ) : members.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-10">No members yet. Add one to get started.</p>
+          <p className="text-sm text-slate-500 dark:text-stone-400 text-center py-10">No members yet. Add one to get started.</p>
         ) : (
           <ul className="space-y-3">
             {members.map((m: AdminMember) => (
@@ -107,9 +107,9 @@ function AddNikIdentityForm({ onSuccess }: { onSuccess: () => void }) {
   return (
     <form
       onSubmit={(e) => void handleSubmit((v) => mutation.mutate(v))(e)}
-      className="bg-white rounded-2xl border border-stone-100 shadow-sm p-4 space-y-3"
+      className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-100 dark:border-stone-800 shadow-sm p-4 space-y-3"
     >
-      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">New family member</p>
+      <p className="text-xs font-semibold text-slate-500 dark:text-stone-400 uppercase tracking-wide">New family member</p>
 
       <Input
         id="displayName"
@@ -130,7 +130,7 @@ function AddNikIdentityForm({ onSuccess }: { onSuccess: () => void }) {
       />
 
       <div className="flex flex-col gap-1.5">
-        <label className="text-sm font-medium text-slate-700">Gender</label>
+        <label className="text-sm font-medium text-slate-700 dark:text-stone-200">Gender</label>
         <Controller
           name="gender"
           control={control}
@@ -144,8 +144,8 @@ function AddNikIdentityForm({ onSuccess }: { onSuccess: () => void }) {
                   className={cn(
                     'flex-1 py-2 rounded-xl border text-sm font-medium transition-colors',
                     field.value === g
-                      ? g === 'MALE' ? 'bg-sky-50 border-sky-300 text-sky-700' : 'bg-rose-50 border-rose-300 text-rose-700'
-                      : 'bg-white border-stone-200 text-slate-500 hover:bg-stone-50',
+                      ? g === 'MALE' ? 'bg-sky-50 dark:bg-sky-950 border-sky-300 dark:border-sky-700 text-sky-700 dark:text-sky-300' : 'bg-rose-50 dark:bg-rose-950 border-rose-300 dark:border-rose-700 text-rose-700 dark:text-rose-300'
+                      : 'bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-700 text-slate-500 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-stone-800',
                   )}
                 >
                   {g === 'MALE' ? '♂ Male' : '♀ Female'}
@@ -181,7 +181,7 @@ function AddNikIdentityForm({ onSuccess }: { onSuccess: () => void }) {
       />
 
       <div className="flex items-center justify-between py-1">
-        <label htmlFor="isDeceased" className="text-sm font-medium text-slate-700">Deceased</label>
+        <label htmlFor="isDeceased" className="text-sm font-medium text-slate-700 dark:text-stone-200">Deceased</label>
         <Controller
           name="isDeceased"
           control={control}
@@ -194,7 +194,7 @@ function AddNikIdentityForm({ onSuccess }: { onSuccess: () => void }) {
               onClick={() => field.onChange(!field.value)}
               className={cn(
                 'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-                field.value ? 'bg-slate-500' : 'bg-stone-200',
+                field.value ? 'bg-slate-500 dark:bg-stone-500' : 'bg-stone-200 dark:bg-stone-700',
               )}
             >
               <span className={cn(
@@ -247,17 +247,17 @@ function MemberRow({ member, onChanged }: { member: AdminMember; onChanged: () =
   })
 
   return (
-    <li className="bg-white rounded-2xl border border-stone-100 shadow-sm p-4">
+    <li className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-100 dark:border-stone-800 shadow-sm p-4">
       <div className="flex items-center gap-3">
         <Avatar src={member.node.avatarUrl} name={member.node.displayName} size="md" />
         <div className="flex-1 min-w-0">
-          <p className={cn(FONT.BODY, 'font-semibold text-slate-800 truncate')}>{member.node.displayName}</p>
-          <p className={cn(FONT.LABEL, 'text-slate-300 font-mono text-[10px]')}>{member.nik ?? 'No NIK (placeholder)'}</p>
+          <p className={cn(FONT.BODY, 'font-semibold text-slate-800 dark:text-stone-100 truncate')}>{member.node.displayName}</p>
+          <p className={cn(FONT.LABEL, 'text-slate-400 dark:text-stone-500 font-mono text-[10px]')}>{member.nik ?? 'No NIK (placeholder)'}</p>
         </div>
         {member.nik && (
           <span className={cn(
             'text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0',
-            member.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-600' : 'bg-stone-100 text-slate-400',
+            member.status === 'ACTIVE' ? 'bg-emerald-50 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400' : 'bg-stone-100 dark:bg-stone-800 text-slate-500 dark:text-stone-400',
           )}>
             {member.status === 'ACTIVE' ? 'Active' : 'Deactivated'}
           </span>
@@ -265,20 +265,20 @@ function MemberRow({ member, onChanged }: { member: AdminMember; onChanged: () =
       </div>
 
       {member.nik && (
-        <div className="mt-3 pt-3 border-t border-stone-50 space-y-2">
+        <div className="mt-3 pt-3 border-t border-stone-50 dark:border-stone-800 space-y-2">
           {/* Linked accounts */}
           {member.linkedAccounts.length > 0 && (
             <ul className="space-y-1.5">
               {member.linkedAccounts.map((acc) => (
                 <li key={acc.id} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="text-slate-600 truncate">
+                  <span className="text-slate-600 dark:text-stone-300 truncate">
                     {acc.email}
-                    {!acc.hasLoggedIn && <span className="text-amber-500 ml-1">(pending first login)</span>}
+                    {!acc.hasLoggedIn && <span className="text-amber-500 dark:text-amber-400 ml-1">(pending first login)</span>}
                   </span>
                   <button
                     onClick={() => unlinkMutation.mutate(acc.id)}
                     disabled={unlinkMutation.isPending}
-                    className="shrink-0 text-slate-300 hover:text-red-400 transition-colors"
+                    className="shrink-0 text-slate-300 dark:text-stone-600 hover:text-red-400 transition-colors"
                     title="Unlink account"
                   >
                     ✕
@@ -297,16 +297,16 @@ function MemberRow({ member, onChanged }: { member: AdminMember; onChanged: () =
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="email@example.com"
-                className="flex-1 text-xs bg-stone-50 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-400"
+                className="flex-1 text-xs bg-stone-50 dark:bg-stone-800 text-slate-800 dark:text-stone-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-brand-400"
               />
               <button
                 onClick={() => email && linkMutation.mutate(email)}
                 disabled={!email || linkMutation.isPending}
-                className="text-xs font-medium text-brand-600 hover:text-brand-700 disabled:opacity-40 px-1"
+                className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300 disabled:opacity-40 px-1"
               >
                 Link
               </button>
-              <button onClick={() => { setShowLinkForm(false); setEmail('') }} className="text-xs text-slate-400 hover:text-slate-600 px-1">
+              <button onClick={() => { setShowLinkForm(false); setEmail('') }} className="text-xs text-slate-500 dark:text-stone-400 hover:text-slate-700 dark:hover:text-stone-200 px-1">
                 Cancel
               </button>
             </div>
@@ -315,7 +315,7 @@ function MemberRow({ member, onChanged }: { member: AdminMember; onChanged: () =
               {member.linkedAccounts.length < 2 && (
                 <button
                   onClick={() => setShowLinkForm(true)}
-                  className="text-xs font-medium text-brand-600 hover:text-brand-700"
+                  className="text-xs font-medium text-brand-600 dark:text-brand-400 hover:text-brand-700 dark:hover:text-brand-300"
                 >
                   + Link account
                 </button>
@@ -323,7 +323,7 @@ function MemberRow({ member, onChanged }: { member: AdminMember; onChanged: () =
               <button
                 onClick={() => statusMutation.mutate(member.status === 'ACTIVE' ? 'DEACTIVATED' : 'ACTIVE')}
                 disabled={statusMutation.isPending}
-                className="text-xs font-medium text-slate-500 hover:text-slate-700 disabled:opacity-40 ml-auto"
+                className="text-xs font-medium text-slate-500 dark:text-stone-400 hover:text-slate-700 dark:hover:text-stone-200 disabled:opacity-40 ml-auto"
               >
                 {member.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
               </button>

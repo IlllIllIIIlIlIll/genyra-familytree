@@ -4,8 +4,6 @@ import {
   ReactFlow,
   ReactFlowProvider,
   Panel,
-  Background,
-  BackgroundVariant,
   MiniMap,
   useNodesState,
   useEdgesState,
@@ -29,6 +27,7 @@ import { BracketEdgeComponent } from './bracket-edge'
 import { ProfileCard } from '@/components/profile/profile-card'
 import { computeFamilyLayout } from './family-layout'
 import { computeGenerations } from './generation-utils'
+import { ThemeSwitcher } from '@/components/ui/theme-switcher'
 import type { PersonNode, Notification } from '@genyra/shared-types'
 
 const nodeTypes = {
@@ -483,7 +482,10 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
       await fitView({ padding: CANVAS.FIT_PADDING, duration: 0 })
       // Give the browser a paint cycle to apply the new viewport transform.
       await new Promise<void>((r) => { requestAnimationFrame(() => { requestAnimationFrame(() => r()) }) })
-      const dataUrl = await toPng(el, { backgroundColor: '#f5f0e8', quality: 0.95 })
+      // Resolve the CSS variable to a literal colour — html-to-image needs an
+      // actual value it can bake into the exported PNG, not a live var().
+      const canvasBg = getComputedStyle(document.documentElement).getPropertyValue('--color-canvas-bg').trim() || '#f5f0e8'
+      const dataUrl = await toPng(el, { backgroundColor: canvasBg, quality: 0.95 })
       const a = document.createElement('a')
       a.href     = dataUrl
       a.download = `${mapData?.familyName ?? 'family-tree'}.png`
@@ -554,10 +556,10 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center" style={{ background: '#f5f0e8' }}>
+      <div className="flex-1 flex items-center justify-center" style={{ background: COLOR.CANVAS_BG }}>
         <div className="text-center">
           <div className="animate-spin h-10 w-10 rounded-full border-2 border-brand-400 border-t-transparent mx-auto mb-3" />
-          <p className="text-sm text-slate-400">Loading your family tree…</p>
+          <p className="text-sm text-slate-500 dark:text-stone-400">Loading your family tree…</p>
         </div>
       </div>
     )
@@ -570,7 +572,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
 
       {/* ── Family header bar (hidden in clean view) ────────────────────────── */}
       {!isCleanView && (
-        <header className="flex items-center justify-between px-4 py-2 bg-white/90 backdrop-blur-sm border-b border-stone-200 shrink-0 z-20">
+        <header className="flex items-center justify-between px-4 py-2 bg-white/90 dark:bg-stone-900/90 backdrop-blur-sm border-b border-stone-200 dark:border-stone-800 shrink-0 z-20">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-brand-400 shrink-0">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -589,18 +591,18 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
                     if (e.key === 'Escape') setIsEditingName(false)
                   }}
                   onBlur={handleNameSave}
-                  className="text-sm font-semibold text-slate-700 bg-stone-100 rounded-lg px-2 py-0.5 flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-brand-400"
+                  className="text-sm font-semibold text-slate-700 dark:text-stone-100 bg-stone-100 dark:bg-stone-800 rounded-lg px-2 py-0.5 flex-1 min-w-0 focus:outline-none focus:ring-1 focus:ring-brand-400"
                 />
               </div>
             ) : (
               <>
-                <span className="text-sm font-semibold text-slate-700 truncate">
+                <span className="text-sm font-semibold text-slate-700 dark:text-stone-100 truncate">
                   {mapData?.familyName ?? 'Family Map'}
                 </span>
                 {isAdmin && (
                   <button
                     onClick={() => { setNameDraft(mapData?.familyName ?? ''); setIsEditingName(true) }}
-                    className="p-1 rounded text-slate-300 hover:text-slate-500 transition-colors shrink-0"
+                    className="p-1 rounded text-slate-300 dark:text-stone-600 hover:text-slate-500 dark:hover:text-stone-400 transition-colors shrink-0"
                     title="Edit family name"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
@@ -612,7 +614,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
                 <div className="relative">
                   <button
                     onClick={() => setIsFamilySwitcherOpen((v) => !v)}
-                    className="p-1 rounded text-slate-300 hover:text-slate-500 transition-colors shrink-0"
+                    className="p-1 rounded text-slate-300 dark:text-stone-600 hover:text-slate-500 dark:hover:text-stone-400 transition-colors shrink-0"
                     title="Switch family"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
@@ -622,18 +624,18 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
                   {isFamilySwitcherOpen && (
                     <>
                       <div className="fixed inset-0 z-[40]" onClick={() => setIsFamilySwitcherOpen(false)} />
-                      <div className="absolute left-0 top-7 z-[41] w-56 bg-white rounded-xl shadow-lg border border-stone-100 py-1 overflow-hidden">
+                      <div className="absolute left-0 top-7 z-[41] w-56 bg-white dark:bg-stone-900 rounded-xl shadow-lg border border-stone-100 dark:border-stone-800 py-1 overflow-hidden">
                         {families.length === 0 ? (
-                          <p className="px-3 py-2.5 text-xs text-slate-400">No other families.</p>
+                          <p className="px-3 py-2.5 text-xs text-slate-500 dark:text-stone-400">No other families.</p>
                         ) : (
                           families.map((f) => (
                             <button
                               key={f.id}
                               disabled={f.id === familyGroupId || switchFamilyMutation.isPending}
                               onClick={() => switchFamilyMutation.mutate(f.id)}
-                              className="w-full text-left px-3 py-2.5 text-sm hover:bg-stone-50 disabled:opacity-50 flex items-center justify-between gap-2"
+                              className="w-full text-left px-3 py-2.5 text-sm hover:bg-stone-50 dark:hover:bg-stone-800 disabled:opacity-50 flex items-center justify-between gap-2"
                             >
-                              <span className="truncate font-medium text-slate-700">{f.name}</span>
+                              <span className="truncate font-medium text-slate-700 dark:text-stone-200">{f.name}</span>
                             </button>
                           ))
                         )}
@@ -645,9 +647,10 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <ThemeSwitcher />
             <button
               onClick={handleOpenNotif}
-              className="relative p-2 rounded-lg text-slate-500 hover:bg-stone-100 transition-colors"
+              className="relative p-2 rounded-lg text-slate-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
               title="Notifications"
             >
               <BellIcon />
@@ -660,7 +663,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
             <button
               onClick={() => void handleDownload()}
               disabled={isDownloading}
-              className="p-2 rounded-lg text-slate-500 hover:bg-stone-100 transition-colors disabled:opacity-40"
+              className="p-2 rounded-lg text-slate-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors disabled:opacity-40"
               title="Download family tree as PNG"
             >
               {isDownloading
@@ -669,7 +672,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
             </button>
             <button
               onClick={handleLogout}
-              className="p-2 rounded-lg text-slate-500 hover:bg-stone-100 transition-colors"
+              className="p-2 rounded-lg text-slate-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
               title="Log out"
             >
               <LogoutIcon />
@@ -706,15 +709,8 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
           maxZoom={CANVAS.MAX_ZOOM}
           translateExtent={translateExtent}
           proOptions={{ hideAttribution: true }}
-          style={{ background: '#f5f0e8' }}
+          style={{ background: COLOR.CANVAS_BG }}
         >
-          <Background
-            variant={BackgroundVariant.Cross}
-            color={COLOR.MAP_GRID_DOT}
-            gap={32}
-            size={5}
-          />
-
           {/* ── Person + Refresh buttons (bottom-left corner) ───────────────── */}
           {!isCleanView && (
             <Panel position="bottom-left" style={{ bottom: 8 }}>
@@ -746,7 +742,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
             <MiniMap
               nodeColor={COLOR.MINIMAP_NODE}
               maskColor={COLOR.MINIMAP_MASK}
-              className="!border-stone-200 !rounded-xl overflow-hidden"
+              className="!border-stone-200 dark:!border-stone-700 !rounded-xl overflow-hidden"
               style={{ width: minimapSize.width, height: minimapSize.height }}
             />
           )}
@@ -754,26 +750,26 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
           {/* ── Generation navigation pill ───────────────────────────────── */}
           {!isCleanView && totalGenerations > GEN_WINDOW && (
             <Panel position="bottom-center" style={{ bottom: isAdmin ? 72 : 16 }}>
-              <div className="flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-full shadow-md border border-stone-200 px-1 py-1">
+              <div className="flex items-center gap-1 bg-white/90 dark:bg-stone-900/90 backdrop-blur-sm rounded-full shadow-md border border-stone-200 dark:border-stone-700 px-1 py-1">
                 <button
                   onClick={() => { setGenOffset((o) => o + 1) }}
                   disabled={!canGoOlder}
                   aria-label="Show older generations"
-                  className="flex items-center justify-center w-8 h-8 rounded-full text-slate-500 hover:bg-stone-100 disabled:opacity-30 transition-colors"
+                  className="flex items-center justify-center w-8 h-8 rounded-full text-slate-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-30 transition-colors"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                     <path fillRule="evenodd" d="M9.47 6.47a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 1 1-1.06 1.06L10 8.06l-3.72 3.72a.75.75 0 0 1-1.06-1.06l4.25-4.25Z" clipRule="evenodd" />
                   </svg>
                 </button>
-                <span className="text-xs font-medium text-slate-600 tabular-nums px-1 min-w-[72px] text-center">
+                <span className="text-xs font-medium text-slate-600 dark:text-stone-300 tabular-nums px-1 min-w-[72px] text-center">
                   Gen {windowMin + 1}–{windowMax + 1}
-                  <span className="text-slate-400"> / {totalGenerations}</span>
+                  <span className="text-slate-500 dark:text-stone-500"> / {totalGenerations}</span>
                 </span>
                 <button
                   onClick={() => { setGenOffset((o) => o - 1) }}
                   disabled={!canGoNewer}
                   aria-label="Show newer generations"
-                  className="flex items-center justify-center w-8 h-8 rounded-full text-slate-500 hover:bg-stone-100 disabled:opacity-30 transition-colors"
+                  className="flex items-center justify-center w-8 h-8 rounded-full text-slate-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-30 transition-colors"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                     <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
@@ -787,7 +783,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
         {/* ── Eye toggle (always visible, top-right corner of canvas) ─────── */}
         <button
           onClick={toggleCleanView}
-          className="absolute top-3 right-3 z-20 p-2 rounded-full bg-white/80 backdrop-blur-sm shadow-sm border border-stone-200 text-slate-500 hover:bg-white hover:text-slate-700 transition-colors"
+          className="absolute top-3 right-3 z-20 p-2 rounded-full bg-white/80 dark:bg-stone-900/80 backdrop-blur-sm shadow-sm border border-stone-200 dark:border-stone-700 text-slate-500 dark:text-stone-400 hover:bg-white dark:hover:bg-stone-800 hover:text-slate-700 dark:hover:text-stone-200 transition-colors"
           title={isCleanView ? 'Show interface' : 'Hide interface (clean view)'}
         >
           {isCleanView ? <EyeOffIcon /> : <EyeIcon />}
@@ -809,24 +805,24 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
         {isNotifPanelOpen && (
           <>
             <div className="absolute inset-0 z-[30]" onClick={handleCloseNotif} />
-            <div className="absolute top-3 right-3 z-[50] w-72 bg-white rounded-2xl shadow-xl border border-stone-100 overflow-hidden">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide px-4 pt-3 pb-2">Notifications</p>
+            <div className="absolute top-3 right-3 z-[50] w-72 bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-100 dark:border-stone-800 overflow-hidden">
+              <p className="text-xs font-semibold text-slate-500 dark:text-stone-400 uppercase tracking-wide px-4 pt-3 pb-2">Notifications</p>
               {notifications.length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-5 px-4">No notifications yet.</p>
+                <p className="text-sm text-slate-500 dark:text-stone-400 text-center py-5 px-4">No notifications yet.</p>
               ) : (
-                <ul className="divide-y divide-stone-50 max-h-72 overflow-y-auto">
+                <ul className="divide-y divide-stone-50 dark:divide-stone-800 max-h-72 overflow-y-auto">
                   {notifications.map((n: Notification) => (
                     <li key={n.id} className="px-4 py-3 flex items-start gap-2">
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs text-slate-700 leading-snug">{n.message}</p>
-                        <p className="text-[10px] text-slate-400 mt-1">
+                        <p className="text-xs text-slate-700 dark:text-stone-200 leading-snug">{n.message}</p>
+                        <p className="text-[10px] text-slate-500 dark:text-stone-500 mt-1">
                           {new Date(n.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                         </p>
                       </div>
                       <button
                         onClick={() => dismissNotifMutation.mutate(n.id)}
                         disabled={dismissNotifMutation.isPending}
-                        className="shrink-0 p-1 rounded-full text-slate-300 hover:text-slate-500 hover:bg-stone-100 transition-colors"
+                        className="shrink-0 p-1 rounded-full text-slate-300 dark:text-stone-600 hover:text-slate-500 dark:hover:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
                         title="Dismiss"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">

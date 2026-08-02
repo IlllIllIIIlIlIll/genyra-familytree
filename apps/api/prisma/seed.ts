@@ -2,7 +2,47 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
-const ADMIN_EMAIL = process.env['SEED_ADMIN_EMAIL'] ?? 'favbalhan@gmail.com'
+const ADMIN_EMAIL  = process.env['SEED_ADMIN_EMAIL']  ?? '18222070@std.stei.itb.ac.id'
+const OWNER_EMAIL   = process.env['SEED_OWNER_EMAIL']  ?? 'favbalhan@gmail.com'
+
+// Deterministic PRNG (mulberry32) so re-seeding always produces the same
+// "randomized" names across local dev and every deployment.
+function mulberry32(seed: number): () => number {
+  let a = seed
+  return () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+function shuffle<T>(arr: T[], rand: () => number): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1))
+    ;[a[i], a[j]] = [a[j] as T, a[i] as T]
+  }
+  return a
+}
+
+const rand = mulberry32(20260802)
+const MALE_NAMES = shuffle([
+  'Wahyu', 'Bambang', 'Dedi', 'Hendra', 'Rizky', 'Fajar', 'Yusuf', 'Arif',
+  'Bayu', 'Doni', 'Eko', 'Fahmi', 'Gilang', 'Hadi', 'Irfan', 'Joko',
+  'Kurnia', 'Lukman', 'Malik', 'Nanda', 'Oscar', 'Prima', 'Rendra', 'Satria',
+  'Taufik', 'Umar', 'Vino', 'Wisnu', 'Yudha', 'Zaki',
+], rand)
+const FEMALE_NAMES = shuffle([
+  'Sri', 'Dewi', 'Rina', 'Fitri', 'Wulan', 'Yulia', 'Indah', 'Lestari',
+  'Mega', 'Nadia', 'Okta', 'Puspa', 'Ratna', 'Sinta', 'Tika', 'Ulfa',
+  'Vera', 'Wati', 'Yanti', 'Zahra', 'Ayu', 'Bella', 'Citra', 'Diana',
+  'Erna', 'Farah', 'Gita', 'Hana', 'Ira', 'Kirana',
+], rand)
+let maleIdx = 0
+let femaleIdx = 0
+function randomName(gender: 'MALE' | 'FEMALE'): string {
+  return gender === 'MALE' ? MALE_NAMES[maleIdx++]! : FEMALE_NAMES[femaleIdx++]!
+}
 
 async function main() {
   console.log('🌱 Seeding database...')
@@ -63,6 +103,18 @@ async function main() {
     })
   }
 
+  /** Same as member(), but with a randomized display name/nickname (gender/dates/relations untouched). */
+  const randomMember = (opts: {
+    gender:       'MALE' | 'FEMALE'
+    birthDate:    Date
+    birthPlace:   string
+    isDeceased?:  boolean
+    deathDate?:   Date
+  }) => {
+    const name = randomName(opts.gender)
+    return member({ ...opts, displayName: name, surname: name })
+  }
+
   const rel = (
     type: 'PARENT_CHILD' | 'SPOUSE' | 'SIBLING',
     src:  string,
@@ -76,15 +128,11 @@ async function main() {
   // GENERATION 0 — Uyut (great-great-grandparents)
   // ══════════════════════════════════════════════════════════════════════════
 
-  // NIK 0000000000000001
-  const aminah = await member({
-    displayName: 'Aminah', surname: 'Uyut Cowo',
+  const aminah = await randomMember({
     gender: 'MALE',   birthDate: new Date('1920-01-01'), birthPlace: 'Jawa Barat',
     isDeceased: true, deathDate: new Date('1990-06-15'),
   })
-  // NIK 0000000000000002
-  const muniah = await member({
-    displayName: "Muni'ah", surname: 'Uyut',
+  const muniah = await randomMember({
     gender: 'FEMALE', birthDate: new Date('1925-06-01'), birthPlace: 'Jawa Barat',
     isDeceased: true, deathDate: new Date('1995-03-20'),
   })
@@ -93,73 +141,51 @@ async function main() {
   // GENERATION 1 — Aki / Nenek (children of Aminah + Muniáh, and their spouses)
   // ══════════════════════════════════════════════════════════════════════════
 
-  // NIK 0000000000000003
-  const sadikin = await member({
-    displayName: 'Aki Sadikin', surname: 'Ikin',
+  const sadikin = await randomMember({
     gender: 'MALE',   birthDate: new Date('1940-03-15'), birthPlace: 'Jawa Barat',
     isDeceased: true, deathDate: new Date('2010-08-22'),
   })
-  // NIK 0000000000000004  — Sadikin's wife
-  const nani = await member({
-    displayName: 'Nani Suryani', surname: 'Nani',
+  const nani = await randomMember({
     gender: 'FEMALE', birthDate: new Date('1944-07-11'), birthPlace: 'Jawa Barat',
     isDeceased: true, deathDate: new Date('2015-03-08'),
   })
 
-  // NIK 0000000000000005
-  const omang = await member({
-    displayName: 'Aki Omang', surname: 'Omang',
+  const omang = await randomMember({
     gender: 'MALE',   birthDate: new Date('1942-07-20'), birthPlace: 'Jawa Barat',
     isDeceased: true, deathDate: new Date('2012-11-04'),
   })
-  // NIK 0000000000000006
-  const idik = await member({
-    displayName: 'Aki Idik', surname: 'Idik',
+  const idik = await randomMember({
     gender: 'MALE',   birthDate: new Date('1944-11-05'), birthPlace: 'Jawa Barat',
     isDeceased: true, deathDate: new Date('2015-02-17'),
   })
-  // NIK 0000000000000007
-  const nEmi = await member({
-    displayName: 'Nenek Emi', surname: 'Emi',
+  const nEmi = await randomMember({
     gender: 'FEMALE', birthDate: new Date('1946-04-12'), birthPlace: 'Jawa Barat',
     isDeceased: true, deathDate: new Date('2018-09-30'),
   })
-  // NIK 0000000000000008
-  const nTalon = await member({
-    displayName: 'Nenek Talon', surname: 'Talon',
+  const nTalon = await randomMember({
     gender: 'FEMALE', birthDate: new Date('1948-09-08'), birthPlace: 'Jawa Barat',
     isDeceased: true, deathDate: new Date('2020-05-12'),
   })
 
   // Emun + Endang
-  // NIK 0000000000000009
-  const emun = await member({
-    displayName: "Emun Munia'h", surname: 'Emun',
+  const emun = await randomMember({
     gender: 'FEMALE', birthDate: new Date('1950-02-14'), birthPlace: 'Jawa Barat',
     isDeceased: true, deathDate: new Date('2019-07-03'),
   })
-  // NIK 0000000000000010
-  const endang = await member({
-    displayName: 'Aki Endang', surname: 'Endang',
+  const endang = await randomMember({
     gender: 'MALE',   birthDate: new Date('1948-05-22'), birthPlace: 'Jawa Barat',
     isDeceased: true, deathDate: new Date('2016-12-01'),
   })
 
   // Emin + Ono (†) + Yono
-  // NIK 0000000000000011
-  const emin = await member({
-    displayName: "Emin Mu'minah", surname: 'Emin',
+  const emin = await randomMember({
     gender: 'FEMALE', birthDate: new Date('1952-08-17'), birthPlace: 'Jawa Barat',
   })
-  // NIK 0000000000000012
-  const ono = await member({
-    displayName: 'Ono Supratna', surname: 'Ono',
+  const ono = await randomMember({
     gender: 'MALE',   birthDate: new Date('1945-10-03'), birthPlace: 'Jawa Barat',
     isDeceased: true, deathDate: new Date('2000-04-19'),
   })
-  // NIK 0000000000000013
-  const yono = await member({
-    displayName: 'Yono Budiono', surname: 'Yono',
+  const yono = await randomMember({
     gender: 'MALE',   birthDate: new Date('1950-03-25'), birthPlace: 'Jawa Barat',
   })
 
@@ -168,78 +194,52 @@ async function main() {
   // ══════════════════════════════════════════════════════════════════════════
 
   // Children of Emun + Endang
-  // NIK 0000000000000014
-  const tato = await member({
-    displayName: 'Sutisna Riyanto', surname: 'Tato',
+  const tato = await randomMember({
     gender: 'MALE',   birthDate: new Date('1970-09-01'), birthPlace: 'Bandung',
   })
-  // NIK 0000000000000015
-  const santi = await member({
-    displayName: 'Santi Kusumawati', surname: 'Santi',
+  const santi = await randomMember({
     gender: 'FEMALE', birthDate: new Date('1971-07-11'), birthPlace: 'Cimahi',
   })
 
-  // NIK 0000000000000016
-  const rini = await member({
-    displayName: 'Wa Rini', surname: 'Rini',
+  const rini = await randomMember({
     gender: 'FEMALE', birthDate: new Date('1972-04-20'), birthPlace: 'Bandung',
   })
-  // NIK 0000000000000017
-  const rudiHo = await member({
-    displayName: 'Rudi Ho', surname: 'Rudi',
+  const rudiHo = await randomMember({
     gender: 'MALE',   birthDate: new Date('1970-02-28'), birthPlace: 'Bandung',
   })
 
-  // NIK 0000000000000018
-  const iwan = await member({
-    displayName: 'Wa Iwan', surname: 'Iwan',
+  const iwan = await randomMember({
     gender: 'MALE',   birthDate: new Date('1975-12-15'), birthPlace: 'Bandung',
   })
 
   // Child of Sadikin + Nani — older branch that leads to Gen 5
-  // NIK 0000000000000019
-  const tatang = await member({
-    displayName: 'Tatang Sadikin', surname: 'Tatang',
+  const tatang = await randomMember({
     gender: 'MALE',   birthDate: new Date('1963-04-08'), birthPlace: 'Bandung',
   })
-  // NIK 0000000000000020  — Tatang's wife
-  const lisna = await member({
-    displayName: 'Lisna Halimah', surname: 'Lisna',
+  const lisna = await randomMember({
     gender: 'FEMALE', birthDate: new Date('1965-10-19'), birthPlace: 'Sumedang',
   })
 
   // Child of Emin + Ono
-  // NIK 0000000000000021
-  const diding = await member({
-    displayName: 'Diding Saefudin', surname: 'Diding',
+  const diding = await randomMember({
     gender: 'MALE',   birthDate: new Date('1968-06-12'), birthPlace: 'Bandung',
   })
-  // NIK 0000000000000022
-  const astrid = await member({
-    displayName: 'Astrid Wulandari', surname: 'Astrid',
+  const astrid = await randomMember({
     gender: 'FEMALE', birthDate: new Date('1970-08-30'), birthPlace: 'Bogor',
   })
 
   // Children of Emin + Yono
-  // NIK 0000000000000023
-  const andi = await member({
-    displayName: 'Andi Budiono', surname: 'Endis',
+  const andi = await randomMember({
     gender: 'MALE',   birthDate: new Date('1972-03-07'), birthPlace: 'Bandung',
   })
-  // NIK 0000000000000024
-  const eno = await member({
-    displayName: 'Eno Songkoyono', surname: 'Eno',
+  const eno = await randomMember({
     gender: 'FEMALE', birthDate: new Date('1974-05-16'), birthPlace: 'Bekasi',
   })
 
-  // NIK 0000000000000025
-  const retno = await member({
-    displayName: 'Retno Budiyati', surname: 'Enok',
+  const retno = await randomMember({
     gender: 'FEMALE', birthDate: new Date('1975-11-22'), birthPlace: 'Bandung',
   })
-  // NIK 0000000000000026
-  const jati = await member({
-    displayName: 'Om Jati Sejati', surname: 'Jati',
+  const jati = await randomMember({
     gender: 'MALE',   birthDate: new Date('1973-01-19'), birthPlace: 'Sumedang',
   })
 
@@ -248,96 +248,65 @@ async function main() {
   // ══════════════════════════════════════════════════════════════════════════
 
   // Children of Tato + Santi
-  // NIK 0000000000000027
-  const andika = await member({
-    displayName: 'Andika', surname: 'Andika',
+  const andika = await randomMember({
     gender: 'MALE',   birthDate: new Date('1993-03-12'), birthPlace: 'Bandung',
   })
-  // NIK 0000000000000028
-  const siska = await member({
-    displayName: 'Siska Andriani', surname: 'Siska',
+  const siska = await randomMember({
     gender: 'FEMALE', birthDate: new Date('1993-02-14'), birthPlace: 'Cimahi',
   })
 
-  // NIK 0000000000000029
-  const pipit = await member({
-    displayName: 'Pipit', surname: 'Pipit',
+  const pipit = await randomMember({
     gender: 'FEMALE', birthDate: new Date('1995-09-05'), birthPlace: 'Bandung',
   })
-  // NIK 0000000000000030
-  const agus = await member({
-    displayName: 'Agus Sujatmiko', surname: 'Agus',
+  const agus = await randomMember({
     gender: 'MALE',   birthDate: new Date('1993-06-22'), birthPlace: 'Garut',
   })
 
   // Children of Rini + Rudi
-  // NIK 0000000000000031
-  const adya = await member({
-    displayName: 'Adya', surname: 'Adya',
+  const adya = await randomMember({
     gender: 'MALE',   birthDate: new Date('1994-11-21'), birthPlace: 'Bandung',
   })
-  // NIK 0000000000000032
-  const alya = await member({
-    displayName: 'Alya Ariesta Riyantina', surname: 'Alya',
+  const alya = await randomMember({
     gender: 'FEMALE', birthDate: new Date('1997-06-08'), birthPlace: 'Bandung',
   })
 
   // Child of Tatang + Lisna — the branch leading to Gen 5
-  // NIK 0000000000000033
-  const cahya = await member({
-    displayName: 'Cahya Pratama', surname: 'Cahya',
+  const cahya = await randomMember({
     gender: 'MALE',   birthDate: new Date('1985-07-14'), birthPlace: 'Bandung',
   })
-  // NIK 0000000000000034  — Cahya's wife
-  const rima = await member({
-    displayName: 'Rima Destiani', surname: 'Rima',
+  const rima = await randomMember({
     gender: 'FEMALE', birthDate: new Date('1987-11-02'), birthPlace: 'Garut',
   })
 
-  // Children of Diding + Astrid
-  // NIK 0000000000000035
+  // Children of Diding + Astrid — Favian keeps his real name; his sibling is randomized
   const favian = await member({
     displayName: 'Favian Izza Diasputra', surname: 'Vian',
     gender: 'MALE',   birthDate: new Date('1998-01-10'), birthPlace: 'Bandung',
   })
-  // NIK 0000000000000036
-  const saffa = await member({
-    displayName: 'Saffanah Elvaretta Diasputri', surname: 'Saffa',
+  const saffa = await randomMember({
     gender: 'FEMALE', birthDate: new Date('2001-07-25'), birthPlace: 'Bandung',
   })
 
   // Children of Andi + Eno
-  // NIK 0000000000000037
-  const dino = await member({
-    displayName: 'Eldino Muhammad Rafif', surname: 'Dino',
+  const dino = await randomMember({
     gender: 'MALE',   birthDate: new Date('1997-04-15'), birthPlace: 'Bekasi',
   })
-  // NIK 0000000000000038  — Dino's wife
-  const mira = await member({
-    displayName: 'Mira Aulia', surname: 'Mira',
+  const mira = await randomMember({
     gender: 'FEMALE', birthDate: new Date('1999-08-23'), birthPlace: 'Jakarta',
   })
 
-  // NIK 0000000000000039
-  const noy = await member({
-    displayName: 'Anne Akeyla Aishabira', surname: 'Noy',
+  const noy = await randomMember({
     gender: 'FEMALE', birthDate: new Date('2000-09-12'), birthPlace: 'Bekasi',
   })
-  // NIK 0000000000000040
-  const andin = await member({
-    displayName: 'Andin Akeyla Aishabira', surname: 'Andin',
+  const andin = await randomMember({
     gender: 'FEMALE', birthDate: new Date('2002-12-03'), birthPlace: 'Bekasi',
   })
 
   // Children of Retno + Jati
-  // NIK 0000000000000041
-  const afnan = await member({
-    displayName: 'Afnan The Waffles', surname: 'Afnan',
+  const afnan = await randomMember({
     gender: 'MALE',   birthDate: new Date('2000-08-17'), birthPlace: 'Sumedang',
   })
-  // NIK 0000000000000042
-  const afika = await member({
-    displayName: 'Afika Akeyla Aishabira', surname: 'Afika',
+  const afika = await randomMember({
     gender: 'FEMALE', birthDate: new Date('2003-05-24'), birthPlace: 'Sumedang',
   })
 
@@ -346,35 +315,25 @@ async function main() {
   // ══════════════════════════════════════════════════════════════════════════
 
   // Child of Pipit + Agus
-  // NIK 0000000000000043
-  const naya = await member({
-    displayName: 'Naya', surname: 'Naya',
+  const naya = await randomMember({
     gender: 'FEMALE', birthDate: new Date('2020-11-07'), birthPlace: 'Bandung',
   })
 
   // Child of Andika + Siska
-  // NIK 0000000000000044
-  const raka = await member({
-    displayName: 'Raka Andika Putra', surname: 'Raka',
+  const raka = await randomMember({
     gender: 'MALE',   birthDate: new Date('2019-05-03'), birthPlace: 'Bandung',
   })
 
   // Children of Cahya + Rima — the oldest Gen 4, able to be parents
-  // NIK 0000000000000045
-  const dzaky = await member({
-    displayName: 'Dzaky Pratama', surname: 'Dzaky',
+  const dzaky = await randomMember({
     gender: 'MALE',   birthDate: new Date('2006-02-18'), birthPlace: 'Bandung',
   })
-  // NIK 0000000000000046  — Dzaky's wife
-  const putri = await member({
-    displayName: 'Putri Ramadhani', surname: 'Putri',
+  const putri = await randomMember({
     gender: 'FEMALE', birthDate: new Date('2007-06-09'), birthPlace: 'Bandung',
   })
 
   // Child of Dino + Mira
-  // NIK 0000000000000047
-  const azka = await member({
-    displayName: 'Azka Rafif', surname: 'Azka',
+  const azka = await randomMember({
     gender: 'MALE',   birthDate: new Date('2023-03-15'), birthPlace: 'Bekasi',
   })
 
@@ -382,19 +341,15 @@ async function main() {
   // GENERATION 5 — children of Dzaky + Putri (great-great-great-grandchildren)
   // ══════════════════════════════════════════════════════════════════════════
 
-  // NIK 0000000000000048
-  const rayyan = await member({
-    displayName: 'Rayyan Al-Fatih', surname: 'Rayyan',
+  const rayyan = await randomMember({
     gender: 'MALE',   birthDate: new Date('2025-01-20'), birthPlace: 'Bandung',
   })
-  // NIK 0000000000000049
-  const arsa = await member({
-    displayName: 'Arsa Aulia', surname: 'Arsa',
+  const arsa = await randomMember({
     gender: 'FEMALE', birthDate: new Date('2026-02-14'), birthPlace: 'Bandung',
   })
 
   // ══════════════════════════════════════════════════════════════════════════
-  // RELATIONSHIPS
+  // RELATIONSHIPS (unchanged — same graph as before, just anonymized names)
   // ══════════════════════════════════════════════════════════════════════════
 
   // Gen 0 couple
@@ -488,21 +443,18 @@ async function main() {
   await rel('PARENT_CHILD', dzaky.id, arsa.id)
   await rel('PARENT_CHILD', putri.id, arsa.id)
 
-  console.log('✓ Created family: Keluarga Besar Sadikin')
+  // ══════════════════════════════════════════════════════════════════════════
+  // ACCOUNT LINKING — Favian's own NIK is bound to the owner's personal email
+  // ══════════════════════════════════════════════════════════════════════════
+
+  const ownerAccount = await prisma.account.create({ data: { email: OWNER_EMAIL } })
+  await prisma.nikLink.create({ data: { accountId: ownerAccount.id, nik: favian.nikId! } })
+
+  console.log('✓ Created family: Keluarga Besar Sadikin (49 members, names randomized)')
   console.log('')
-  console.log('  Gen 0 : Aminah (Uyut Cowo) ↔ Muniáh (Uyut)')
-  console.log('  Gen 1 : Sadikin↔Nani | Omang | Idik | Nenek Emi | Nenek Talon')
-  console.log('          Emun↔Endang | Emin↔Ono(†)↔Yono')
-  console.log('  Gen 2 : Tato↔Santi | Rini↔Rudi | Iwan | Tatang↔Lisna')
-  console.log('          Diding↔Astrid | Andi↔Eno | Retno↔Jati')
-  console.log('  Gen 3 : Andika↔Siska | Pipit↔Agus | Adya | Alya | Cahya↔Rima')
-  console.log('          Favian (Vian) | Saffa | Dino↔Mira | Noy | Andin | Afnan | Afika')
-  console.log('  Gen 4 : Naya | Raka | Dzaky↔Putri | Azka')
-  console.log('  Gen 5 : Rayyan | Arsa')
-  console.log('')
-  console.log('  49 family members, all NIKs are sequential dummies (0000000000000001…)')
-  console.log('  None of them have a linked Google account yet — link real emails via the admin interface.')
-  console.log(`  Admin account: ${ADMIN_EMAIL} (owns Keluarga Besar Sadikin, sign in with Google to access /admin)`)
+  console.log(`  Admin account:  ${ADMIN_EMAIL} (owns the family, sign in with Google to reach /admin)`)
+  console.log(`  Personal account: ${OWNER_EMAIL} — linked to Favian Izza Diasputra (NIK ${favian.nikId})`)
+  console.log('  Everyone else has zero linked Google accounts — link real emails via the admin interface.')
 }
 
 main()

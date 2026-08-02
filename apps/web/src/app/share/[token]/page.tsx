@@ -18,10 +18,10 @@ export default function PublicSharePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-stone-50">
+      <div className="min-h-dvh flex items-center justify-center bg-stone-50">
         <div className="text-center">
           <div className="animate-spin h-10 w-10 rounded-full border-2 border-brand-400 border-t-transparent mx-auto mb-3" />
-          <p className={cn(FONT.BODY, 'text-slate-400')}>Loading family tree…</p>
+          <p className={cn(FONT.BODY, 'text-slate-500')}>Loading family tree…</p>
         </div>
       </div>
     )
@@ -29,10 +29,10 @@ export default function PublicSharePage() {
 
   if (isError || !data) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-stone-50 p-8">
+      <div className="min-h-dvh flex items-center justify-center bg-stone-50 p-8">
         <div className="text-center max-w-sm">
           <p className={cn(FONT.HEADING_SM, 'font-semibold text-slate-600 mb-2')}>Link expired or invalid</p>
-          <p className={cn(FONT.BODY, 'text-slate-400')}>
+          <p className={cn(FONT.BODY, 'text-slate-500')}>
             This share link may have expired (links are valid for 30 days) or been revoked. Ask the family head to generate a new one.
           </p>
         </div>
@@ -41,12 +41,12 @@ export default function PublicSharePage() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="min-h-dvh bg-stone-50">
       <header className="bg-white border-b border-stone-100 px-4 py-3 flex items-center gap-3">
         <img src="/genyra_logo.png" alt="Genyra" className="h-7 w-7" />
         <div>
           <h1 className={cn(FONT.HEADING_SM, 'font-semibold text-slate-800')}>{data.familyName}</h1>
-          <p className={cn(FONT.LABEL, 'text-slate-400')}>Read-only family tree</p>
+          <p className={cn(FONT.LABEL, 'text-slate-500')}>Read-only family tree</p>
         </div>
       </header>
 
@@ -61,9 +61,9 @@ export default function PublicSharePage() {
                 {n.displayName.charAt(0).toUpperCase()}
               </div>
               <p className={cn(FONT.BODY, 'font-semibold text-slate-800 truncate')}>{n.displayName}</p>
-              {n.surname && <p className={cn(FONT.LABEL, 'text-slate-400 truncate')}>{n.surname}</p>}
+              {n.surname && <p className={cn(FONT.LABEL, 'text-slate-500 truncate')}>{n.surname}</p>}
               {n.birthDate && (
-                <p className={cn(FONT.LABEL, 'text-slate-300 mt-0.5')}>
+                <p className={cn(FONT.LABEL, 'text-slate-400 mt-0.5')}>
                   {new Date(n.birthDate).getFullYear()}
                   {n.isDeceased && n.deathDate ? ` – ${new Date(n.deathDate).getFullYear()}` : ''}
                   {n.isDeceased && !n.deathDate ? ' †' : ''}
@@ -73,7 +73,7 @@ export default function PublicSharePage() {
           ))}
         </div>
 
-        <p className={cn(FONT.LABEL, 'text-slate-300 text-center mt-8')}>
+        <p className={cn(FONT.LABEL, 'text-slate-400 text-center mt-8')}>
           Powered by Genyra · Read-only view
         </p>
       </div>

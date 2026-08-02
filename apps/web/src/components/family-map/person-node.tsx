@@ -20,10 +20,10 @@ const handleCls = '!opacity-0 !w-2 !h-2 !border-0 !bg-transparent'
 // Alive Female → rose pink.
 // Unknown      → neutral white.
 function cardColorCls(gender: string | null, isDeceased: boolean): string {
-  if (isDeceased) return 'bg-white border-slate-400'
-  if (gender === 'MALE')   return 'bg-sky-50 border-sky-200'
-  if (gender === 'FEMALE') return 'bg-rose-50 border-rose-200'
-  return 'bg-white border-slate-200'
+  if (isDeceased) return 'bg-white dark:bg-stone-800 border-slate-400 dark:border-stone-500'
+  if (gender === 'MALE')   return 'bg-sky-50 dark:bg-sky-950 border-sky-200 dark:border-sky-800'
+  if (gender === 'FEMALE') return 'bg-rose-50 dark:bg-rose-950 border-rose-200 dark:border-rose-800'
+  return 'bg-white dark:bg-stone-800 border-slate-200 dark:border-stone-600'
 }
 
 function hoverCls(gender: string | null, isDeceased: boolean): string {
@@ -80,23 +80,23 @@ export const PersonNodeComponent = memo(function PersonNodeComponent({
         <div className="text-center w-full overflow-hidden">
           <div className="flex items-center justify-center gap-0.5">
             {node.isDeceased && node.gender && (
-              <span className={cn(FONT.NODE_BADGE, 'text-slate-500 leading-none')}>
+              <span className={cn(FONT.NODE_BADGE, 'text-slate-500 dark:text-stone-400 leading-none')}>
                 {node.gender === 'MALE' ? '♂' : '♀'}
               </span>
             )}
-            <p className={cn(FONT.NODE_NAME, 'font-semibold text-slate-800 leading-tight line-clamp-2')}>
+            <p className={cn(FONT.NODE_NAME, 'font-semibold text-slate-800 dark:text-stone-100 leading-tight line-clamp-2')}>
               {abbreviateName(node.displayName, node.surname, MAX_CHARS.NODE_NAME)}
             </p>
           </div>
           {node.surname && (
-            <p className={cn(FONT.NODE_BADGE, 'text-slate-500 mt-0.5 font-medium')}>
+            <p className={cn(FONT.NODE_BADGE, 'text-slate-500 dark:text-stone-400 mt-0.5 font-medium')}>
               {node.surname.length > MAX_CHARS.NODE_SURNAME
                 ? `${node.surname.slice(0, MAX_CHARS.NODE_SURNAME)}…`
                 : node.surname}
             </p>
           )}
           {node.birthDate && (
-            <p className={cn(FONT.NODE_YEAR, 'text-slate-400 mt-0.5')}>
+            <p className={cn(FONT.NODE_YEAR, 'text-slate-500 dark:text-stone-500 mt-0.5')}>
               {new Date(node.birthDate).getFullYear()}
               {node.deathDate ? ` – ${new Date(node.deathDate).getFullYear()}` : ''}
             </p>

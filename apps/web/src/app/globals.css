@@ -1,7 +1,15 @@
 @import "tailwindcss";
 
+/* Enables `dark:` utilities to respond to a `.dark` class on <html>
+   (toggled from ThemeProvider) instead of only OS preference. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
-  --color-brand-50: oklch(0.97 0.01 350);
+  /* ── Brand accent scale ──────────────────────────────────────────────────
+     Overridden per-theme below via [data-theme="…"] on <html>. The lightness
+     /chroma curve is identical across themes — only hue changes — so every
+     theme keeps the same contrast and vibrancy characteristics. */
+  --color-brand-50:  oklch(0.97 0.01 350);
   --color-brand-100: oklch(0.94 0.03 350);
   --color-brand-200: oklch(0.88 0.06 350);
   --color-brand-300: oklch(0.79 0.10 350);
@@ -15,6 +23,122 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
+/* ── Theme picker: flat (non-gradient) named accent hues ─────────────────────
+   Applied via `data-theme` on <html>. "rose" is the default and matches :root
+   so the app looks identical before JS hydrates the persisted preference. */
+:root,
+[data-theme="rose"] {
+  --color-brand-50:  oklch(0.97 0.01 350);
+  --color-brand-100: oklch(0.94 0.03 350);
+  --color-brand-200: oklch(0.88 0.06 350);
+  --color-brand-300: oklch(0.79 0.10 350);
+  --color-brand-400: oklch(0.70 0.14 350);
+  --color-brand-500: oklch(0.62 0.18 350);
+  --color-brand-600: oklch(0.54 0.18 350);
+  --color-brand-700: oklch(0.46 0.16 350);
+  --color-brand-800: oklch(0.38 0.12 350);
+  --color-brand-900: oklch(0.30 0.08 350);
+}
+
+[data-theme="ocean"] {
+  --color-brand-50:  oklch(0.97 0.01 250);
+  --color-brand-100: oklch(0.94 0.03 250);
+  --color-brand-200: oklch(0.88 0.06 250);
+  --color-brand-300: oklch(0.79 0.10 250);
+  --color-brand-400: oklch(0.70 0.14 250);
+  --color-brand-500: oklch(0.62 0.18 250);
+  --color-brand-600: oklch(0.54 0.18 250);
+  --color-brand-700: oklch(0.46 0.16 250);
+  --color-brand-800: oklch(0.38 0.12 250);
+  --color-brand-900: oklch(0.30 0.08 250);
+}
+
+[data-theme="forest"] {
+  --color-brand-50:  oklch(0.97 0.01 160);
+  --color-brand-100: oklch(0.94 0.03 160);
+  --color-brand-200: oklch(0.88 0.06 160);
+  --color-brand-300: oklch(0.79 0.10 160);
+  --color-brand-400: oklch(0.70 0.14 160);
+  --color-brand-500: oklch(0.62 0.18 160);
+  --color-brand-600: oklch(0.54 0.18 160);
+  --color-brand-700: oklch(0.46 0.16 160);
+  --color-brand-800: oklch(0.38 0.12 160);
+  --color-brand-900: oklch(0.30 0.08 160);
+}
+
+[data-theme="violet"] {
+  --color-brand-50:  oklch(0.97 0.01 290);
+  --color-brand-100: oklch(0.94 0.03 290);
+  --color-brand-200: oklch(0.88 0.06 290);
+  --color-brand-300: oklch(0.79 0.10 290);
+  --color-brand-400: oklch(0.70 0.14 290);
+  --color-brand-500: oklch(0.62 0.18 290);
+  --color-brand-600: oklch(0.54 0.18 290);
+  --color-brand-700: oklch(0.46 0.16 290);
+  --color-brand-800: oklch(0.38 0.12 290);
+  --color-brand-900: oklch(0.30 0.08 290);
+}
+
+[data-theme="amber"] {
+  --color-brand-50:  oklch(0.97 0.01 60);
+  --color-brand-100: oklch(0.94 0.03 60);
+  --color-brand-200: oklch(0.88 0.06 60);
+  --color-brand-300: oklch(0.79 0.10 60);
+  --color-brand-400: oklch(0.70 0.14 60);
+  --color-brand-500: oklch(0.62 0.18 60);
+  --color-brand-600: oklch(0.54 0.18 60);
+  --color-brand-700: oklch(0.46 0.16 60);
+  --color-brand-800: oklch(0.38 0.12 60);
+  --color-brand-900: oklch(0.30 0.08 60);
+}
+
+[data-theme="coral"] {
+  --color-brand-50:  oklch(0.97 0.01 20);
+  --color-brand-100: oklch(0.94 0.03 20);
+  --color-brand-200: oklch(0.88 0.06 20);
+  --color-brand-300: oklch(0.79 0.10 20);
+  --color-brand-400: oklch(0.70 0.14 20);
+  --color-brand-500: oklch(0.62 0.18 20);
+  --color-brand-600: oklch(0.54 0.18 20);
+  --color-brand-700: oklch(0.46 0.16 20);
+  --color-brand-800: oklch(0.38 0.12 20);
+  --color-brand-900: oklch(0.30 0.08 20);
+}
+
+/* ── Non-Tailwind color tokens (SVG / React Flow inline styles) ─────────────
+   Consumed by apps/web/src/lib/design-tokens.ts via var() so they follow the
+   active theme + light/dark mode without any JS-side computation. Derived
+   from the current brand scale, so they re-tint automatically per theme. */
+:root {
+  --color-edge-spouse:        oklch(0.65 0.02 260);
+  --color-edge-parent-child:  var(--color-brand-400);
+  --color-edge-sibling:       var(--color-brand-300);
+  --color-edge-junction:      var(--color-brand-400);
+  --color-edge-highlight:     var(--color-brand-600);
+  --color-map-grid-dot:       oklch(0.75 0.03 70);
+  --color-minimap-node:       var(--color-brand-500);
+  --color-minimap-mask:       oklch(0.97 0.02 350 / 0.7);
+  --color-canvas-bg:          oklch(0.95 0.02 70);
+
+  /* Semantic surface/text used for the page body — see @layer base below. */
+  --color-surface: var(--color-brand-50);
+  --color-text:    oklch(0.20 0.01 260);
+}
+
+[data-theme="ocean"]  { --color-minimap-mask: oklch(0.97 0.02 250 / 0.7); }
+[data-theme="forest"] { --color-minimap-mask: oklch(0.97 0.02 160 / 0.7); }
+[data-theme="violet"] { --color-minimap-mask: oklch(0.97 0.02 290 / 0.7); }
+[data-theme="amber"]  { --color-minimap-mask: oklch(0.97 0.02 60  / 0.7); }
+[data-theme="coral"]  { --color-minimap-mask: oklch(0.97 0.02 20  / 0.7); }
+
+.dark {
+  --color-edge-spouse:    oklch(0.55 0.02 260);
+  --color-minimap-mask:   oklch(0.22 0.02 260 / 0.75);
+  --color-canvas-bg:      oklch(0.20 0.015 70);
+  --color-surface:        oklch(0.16 0.01 260);
+  --color-text:           oklch(0.93 0.01 260);
+}
+
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;
@@ -22,8 +146,8 @@
   }
 
   body {
-    background-color: var(--color-brand-50);
-    color: oklch(0.20 0.01 260);
+    background-color: var(--color-surface);
+    color: var(--color-text);
     font-family: var(--font-sans);
     overscroll-behavior: none;
   }
@@ -36,4 +160,23 @@
 
 .animate-toast-in {
   animation: toast-in 0.2s ease-out forwards;
+}
+
+/* ── React Flow dark-mode overrides ──────────────────────────────────────────
+   @xyflow/react ships light-only inline defaults for its built-in controls /
+   minimap chrome; retint them to follow `.dark` since they're not reachable
+   via Tailwind classes on the React components themselves. */
+.dark .react-flow__controls-button {
+  background: var(--color-stone-900, #1c1917);
+  border-bottom-color: var(--color-stone-800, #292524);
+  color: var(--color-stone-300, #d6d3d1);
+}
+.dark .react-flow__controls-button:hover {
+  background: var(--color-stone-800, #292524);
+}
+.dark .react-flow__minimap {
+  background-color: var(--color-stone-900, #1c1917);
+}
+.dark .react-flow__attribution {
+  background: transparent;
 }

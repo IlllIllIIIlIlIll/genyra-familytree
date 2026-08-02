@@ -23,7 +23,7 @@ export function LoginForm() {
     <Button
       type="button"
       size="lg"
-      className="w-full bg-white text-slate-700 border border-stone-200 hover:bg-stone-50"
+      className="w-full bg-white dark:bg-stone-900 text-slate-700 dark:text-stone-200 border border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800"
       onClick={handleGoogleSignIn}
     >
       <GoogleIcon />
