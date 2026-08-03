@@ -10,6 +10,7 @@ import { useAuthStore, useToastStore } from '@/store/map-store'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ThemeSwitcher } from '@/components/ui/theme-switcher'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { cn } from '@/lib/utils'
 import { FONT, MAX_CHARS } from '@/lib/design-tokens'
 import type { LeaveRequest } from '@genyra/shared-types'
@@ -129,6 +130,7 @@ function AdminDashboard({ familyId, familyName }: { familyId: string; familyName
   const [isEditingName, setIsEditingName]             = useState(false)
   const [nameDraft, setNameDraft]                     = useState(familyName)
   const [confirmDeleteFamily, setConfirmDeleteFamily] = useState(false)
+  const [pendingLeaveAction, setPendingLeaveAction]   = useState<{ requestId: string; approve: boolean; displayName: string } | null>(null)
 
   const { data: members = [] } = useQuery({
     queryKey: ['admin-members'],
@@ -158,8 +160,12 @@ function AdminDashboard({ familyId, familyName }: { familyId: string; familyName
       void queryClient.invalidateQueries({ queryKey: ['admin-members'] })
       void queryClient.invalidateQueries({ queryKey: ['map-data', familyId] })
       toast(approve ? 'Member removed from family' : 'Leave request rejected', 'neutral')
+      setPendingLeaveAction(null)
     },
-    onError: () => toast('Failed to process request', 'error'),
+    onError: () => {
+      toast('Failed to process request', 'error')
+      setPendingLeaveAction(null)
+    },
   })
 
   const deleteFamilyMutation = useMutation({
@@ -223,13 +229,13 @@ function AdminDashboard({ familyId, familyName }: { familyId: string; familyName
               Members ({members.length})
             </Link>
             <Link
-              href="/map"
+              href="/admin/activity"
               className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium bg-stone-50 dark:bg-stone-800 hover:bg-stone-100 dark:hover:bg-stone-700 text-slate-600 dark:text-stone-300 rounded-xl transition-colors"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
-                <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                <path fillRule="evenodd" d="M15.5 2A1.5 1.5 0 0 1 17 3.5v13a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 16.5v-13A1.5 1.5 0 0 1 4.5 2h11ZM6 6.75A.75.75 0 0 1 6.75 6h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 6 6.75Zm0 3A.75.75 0 0 1 6.75 9h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 6 9.75Zm0 3a.75.75 0 0 1 .75-.75h3.5a.75.75 0 0 1 0 1.5h-3.5a.75.75 0 0 1-.75-.75Z" clipRule="evenodd" />
               </svg>
-              View Map
+              Activity
             </Link>
             <ThemeSwitcher />
           </div>
@@ -243,13 +249,13 @@ function AdminDashboard({ familyId, familyName }: { familyId: string; familyName
       <div className="p-4 max-w-4xl mx-auto space-y-5">
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {/* ── Share family tree card ──────────────────────────────────────── */}
+          {/* ── Export card ──────────────────────────────────────────────────── */}
           <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-100 dark:border-stone-800 p-5">
-            <p className="text-xs font-semibold text-slate-500 dark:text-stone-400 uppercase tracking-wide mb-3">Share Family Tree</p>
+            <p className="text-xs font-semibold text-slate-500 dark:text-stone-400 uppercase tracking-wide mb-3">Export</p>
             <p className="text-xs text-slate-500 dark:text-stone-400 mb-3">
-              Generate a read-only link valid for 30 days. Anyone with the link can view (not edit) the family tree.
+              Download the full member list — NIK, names, status, and linked accounts — as an Excel file.
             </p>
-            <ShareLinkSection />
+            <ExportExcelButton />
           </div>
 
           {/* ── Danger zone ──────────────────────────────────────────────────── */}
@@ -307,14 +313,14 @@ function AdminDashboard({ familyId, familyName }: { familyId: string; familyName
                     </div>
                     <div className="flex gap-2 shrink-0">
                       <button
-                        onClick={() => processLeaveMutation.mutate({ requestId: req.id, approve: true })}
+                        onClick={() => setPendingLeaveAction({ requestId: req.id, approve: true, displayName: req.displayName })}
                         disabled={processLeaveMutation.isPending}
                         className="px-3 py-1.5 text-xs font-medium bg-stone-100 dark:bg-stone-800 text-slate-600 dark:text-stone-300 rounded-lg hover:bg-stone-200 dark:hover:bg-stone-700 disabled:opacity-50"
                       >
                         Approve
                       </button>
                       <button
-                        onClick={() => processLeaveMutation.mutate({ requestId: req.id, approve: false })}
+                        onClick={() => setPendingLeaveAction({ requestId: req.id, approve: false, displayName: req.displayName })}
                         disabled={processLeaveMutation.isPending}
                         className="px-3 py-1.5 text-xs font-medium bg-brand-50 dark:bg-brand-950 text-brand-600 dark:text-brand-400 rounded-lg hover:bg-brand-100 dark:hover:bg-brand-900 disabled:opacity-50"
                       >
@@ -329,60 +335,47 @@ function AdminDashboard({ familyId, familyName }: { familyId: string; familyName
         </div>
 
       </div>
+
+      <ConfirmDialog
+        open={pendingLeaveAction !== null}
+        title={pendingLeaveAction?.approve ? 'Approve leave request?' : 'Reject leave request?'}
+        description={
+          pendingLeaveAction?.approve
+            ? `${pendingLeaveAction.displayName} will be removed from the family tree. This cannot be undone.`
+            : `${pendingLeaveAction?.displayName}'s request to leave the family will be dismissed.`
+        }
+        confirmLabel={pendingLeaveAction?.approve ? 'Approve' : 'Reject'}
+        tone={pendingLeaveAction?.approve ? 'danger' : 'neutral'}
+        isLoading={processLeaveMutation.isPending}
+        onConfirm={() => { if (pendingLeaveAction) processLeaveMutation.mutate({ requestId: pendingLeaveAction.requestId, approve: pendingLeaveAction.approve }) }}
+        onCancel={() => setPendingLeaveAction(null)}
+      />
     </div>
   )
 }
 
-function ShareLinkSection() {
+function ExportExcelButton() {
   const toast = useToastStore((s) => s.toast)
-  const [shareUrl, setShareUrl] = useState<string | null>(null)
-  const [copied, setCopied]     = useState(false)
+  const [isDownloading, setIsDownloading] = useState(false)
 
-  const createTokenMutation = useMutation({
-    mutationFn: () => apiClient.createShareToken(),
-    onSuccess: ({ token }) => {
-      const url = `${window.location.origin}/share/${token}`
-      setShareUrl(url)
-    },
-    onError: () => toast('Failed to create share link', 'error'),
-  })
-
-  const handleCopy = () => {
-    if (!shareUrl) return
-    void navigator.clipboard.writeText(shareUrl)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  if (shareUrl) {
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 p-2 bg-stone-50 dark:bg-stone-800 rounded-xl border border-stone-100 dark:border-stone-700">
-          <p className="text-[10px] font-mono text-slate-600 dark:text-stone-300 flex-1 break-all leading-relaxed">{shareUrl}</p>
-          <button
-            onClick={handleCopy}
-            className="shrink-0 px-2 py-1 text-xs font-medium bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-slate-600 dark:text-stone-300 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors"
-          >
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
-        </div>
-        <button
-          onClick={() => { setShareUrl(null) }}
-          className="text-xs text-slate-500 dark:text-stone-400 hover:text-slate-700 dark:hover:text-stone-200 transition-colors"
-        >
-          Generate another link
-        </button>
-      </div>
-    )
+  const handleDownload = async () => {
+    setIsDownloading(true)
+    try {
+      await apiClient.admin.downloadMembersExcel()
+    } catch {
+      toast('Failed to generate export', 'error')
+    } finally {
+      setIsDownloading(false)
+    }
   }
 
   return (
     <button
-      onClick={() => createTokenMutation.mutate()}
-      disabled={createTokenMutation.isPending}
+      onClick={() => void handleDownload()}
+      disabled={isDownloading}
       className="w-full py-2 text-xs font-medium text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950 hover:bg-brand-100 dark:hover:bg-brand-900 rounded-xl transition-colors disabled:opacity-50"
     >
-      {createTokenMutation.isPending ? 'Generating…' : 'Generate share link'}
+      {isDownloading ? 'Preparing…' : 'Download Excel'}
     </button>
   )
 }

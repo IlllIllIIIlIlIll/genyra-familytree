@@ -20,6 +20,7 @@ function CallbackContent() {
   const code        = searchParams.get('code')
   const setTokens   = useAuthStore((s) => s.setTokens)
   const setUser     = useAuthStore((s) => s.setUser)
+  const clearAuth   = useAuthStore((s) => s.clear)
   const toast       = useToastStore((s) => s.toast)
 
   const [exchange, setExchange]         = useState<GoogleExchangeResponse | null>(null)
@@ -107,6 +108,14 @@ function CallbackContent() {
     selectNikMutation.mutate({ sessionToken: exchange.sessionToken, nik, familyGroupId })
   }
 
+  // This Google account has no persona/family to enter — clear any
+  // half-authenticated state before sending it back to /login rather than
+  // leaving it lingering on a dead-end screen.
+  const handleReturnToLogin = () => {
+    clearAuth()
+    router.replace('/login')
+  }
+
   if (status === 'loading') {
     return (
       <div className="text-center">
@@ -125,6 +134,13 @@ function CallbackContent() {
             Your Google account isn&apos;t linked to a family member yet. Ask your family admin
             to link your email to your NIK to get access.
           </p>
+          <button
+            type="button"
+            onClick={handleReturnToLogin}
+            className="mt-5 w-full py-2.5 text-sm font-medium bg-stone-100 dark:bg-stone-800 text-slate-600 dark:text-stone-300 rounded-xl hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors"
+          >
+            Return to login
+          </button>
         </div>
       </div>
     )

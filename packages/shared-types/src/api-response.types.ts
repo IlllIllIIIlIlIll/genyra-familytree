@@ -56,3 +56,14 @@ export const FamilySummarySchema = z.object({
   name: z.string(),
 })
 export type FamilySummary = z.infer<typeof FamilySummarySchema>
+
+export const AuditLogEntrySchema = z.object({
+  id:             z.string(),
+  familyGroupId:  z.string(),
+  actorAccountId: z.string(),
+  action:         z.string(),
+  targetId:       z.string().nullable(),
+  details:        z.string().nullable(),
+  createdAt:      z.string().datetime(),
+})
+export type AuditLogEntry = z.infer<typeof AuditLogEntrySchema>

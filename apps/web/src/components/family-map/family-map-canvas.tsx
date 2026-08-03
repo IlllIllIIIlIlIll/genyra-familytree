@@ -804,7 +804,7 @@ function FamilyMapInner({ familyGroupId }: FamilyMapCanvasProps) {
         {/* ── Notification dropdown (top-right, above eye icon) ───────────── */}
         {isNotifPanelOpen && (
           <>
-            <div className="absolute inset-0 z-[30]" onClick={handleCloseNotif} />
+            <div className="fixed inset-0 z-[30]" onClick={handleCloseNotif} />
             <div className="absolute top-3 right-3 z-[50] w-72 bg-white dark:bg-stone-900 rounded-2xl shadow-xl border border-stone-100 dark:border-stone-800 overflow-hidden">
               <p className="text-xs font-semibold text-slate-500 dark:text-stone-400 uppercase tracking-wide px-4 pt-3 pb-2">Notifications</p>
               {notifications.length === 0 ? (

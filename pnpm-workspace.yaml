@@ -2,6 +2,14 @@ packages:
   - 'apps/*'
   - 'packages/*'
 
+# @nestjs/platform-fastify pins its own fastify version, which pnpm's strict
+# isolation resolves as a second, separate copy from apps/api's own direct
+# `fastify` dependency — same version range, but two nominally distinct
+# FastifyInstance types, breaking TS assignability for anything that imports
+# `fastify` directly (e.g. app.register() for a plugin). Force one copy.
+overrides:
+  fastify: ^5.8.2
+
 onlyBuiltDependencies:
   - '@nestjs/core'
   - '@prisma/client'

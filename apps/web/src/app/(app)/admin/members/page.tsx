@@ -6,11 +6,13 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { CreateNikIdentitySchema, type CreateNikIdentityDto } from '@genyra/shared-types'
+import { useMemo } from 'react'
 import { apiClient, type AdminMember } from '@/lib/api-client'
 import { useToastStore } from '@/store/map-store'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { FONT } from '@/lib/design-tokens'
 import { cn } from '@/lib/utils'
 
@@ -19,11 +21,22 @@ export default function AdminMembersPage() {
   const toast       = useToastStore((s) => s.toast)
   const queryClient = useQueryClient()
   const [showAddForm, setShowAddForm] = useState(false)
+  const [search, setSearch] = useState('')
 
   const { data: members = [], isLoading } = useQuery({
     queryKey: ['admin-members'],
     queryFn:  () => apiClient.admin.listMembers(),
   })
+
+  const filteredMembers = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return members
+    return members.filter((m: AdminMember) =>
+      m.node.displayName.toLowerCase().includes(q) ||
+      (m.node.surname?.toLowerCase().includes(q) ?? false) ||
+      (m.nik?.toLowerCase().includes(q) ?? false),
+    )
+  }, [members, search])
 
   const invalidateMembers = () => {
     void queryClient.invalidateQueries({ queryKey: ['admin-members'] })
@@ -60,15 +73,26 @@ export default function AdminMembersPage() {
           />
         )}
 
+        {members.length > 0 && (
+          <Input
+            id="memberSearch"
+            placeholder="Search by name or NIK…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        )}
+
         {isLoading ? (
           <div className="flex justify-center py-10">
             <div className="animate-spin h-8 w-8 rounded-full border-2 border-brand-400 border-t-transparent" />
           </div>
         ) : members.length === 0 ? (
           <p className="text-sm text-slate-500 dark:text-stone-400 text-center py-10">No members yet. Add one to get started.</p>
+        ) : filteredMembers.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-stone-400 text-center py-10">No members match &quot;{search}&quot;.</p>
         ) : (
           <ul className="space-y-3">
-            {members.map((m: AdminMember) => (
+            {filteredMembers.map((m: AdminMember) => (
               <MemberRow key={m.node.id} member={m} onChanged={invalidateMembers} />
             ))}
           </ul>
@@ -219,11 +243,20 @@ function MemberRow({ member, onChanged }: { member: AdminMember; onChanged: () =
   const toast = useToastStore((s) => s.toast)
   const [showLinkForm, setShowLinkForm] = useState(false)
   const [email, setEmail] = useState('')
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false)
+  const [pendingUnlink, setPendingUnlink] = useState<{ accountId: string; email: string } | null>(null)
 
   const statusMutation = useMutation({
     mutationFn: (status: 'ACTIVE' | 'DEACTIVATED') => apiClient.admin.setNikStatus(member.nik!, status),
-    onSuccess: () => { onChanged(); toast('Status updated', 'success') },
-    onError: () => toast('Failed to update status', 'error'),
+    onSuccess: () => {
+      onChanged()
+      toast('Status updated', 'success')
+      setConfirmDeactivate(false)
+    },
+    onError: () => {
+      toast('Failed to update status', 'error')
+      setConfirmDeactivate(false)
+    },
   })
 
   const linkMutation = useMutation({
@@ -242,8 +275,15 @@ function MemberRow({ member, onChanged }: { member: AdminMember; onChanged: () =
 
   const unlinkMutation = useMutation({
     mutationFn: (accountId: string) => apiClient.admin.unlinkAccount(member.nik!, accountId),
-    onSuccess: () => { onChanged(); toast('Account unlinked', 'neutral') },
-    onError: () => toast('Failed to unlink account', 'error'),
+    onSuccess: () => {
+      onChanged()
+      toast('Account unlinked', 'neutral')
+      setPendingUnlink(null)
+    },
+    onError: () => {
+      toast('Failed to unlink account', 'error')
+      setPendingUnlink(null)
+    },
   })
 
   return (
@@ -276,7 +316,7 @@ function MemberRow({ member, onChanged }: { member: AdminMember; onChanged: () =
                     {!acc.hasLoggedIn && <span className="text-amber-500 dark:text-amber-400 ml-1">(pending first login)</span>}
                   </span>
                   <button
-                    onClick={() => unlinkMutation.mutate(acc.id)}
+                    onClick={() => setPendingUnlink({ accountId: acc.id, email: acc.email })}
                     disabled={unlinkMutation.isPending}
                     className="shrink-0 text-slate-300 dark:text-stone-600 hover:text-red-400 transition-colors"
                     title="Unlink account"
@@ -321,7 +361,7 @@ function MemberRow({ member, onChanged }: { member: AdminMember; onChanged: () =
                 </button>
               )}
               <button
-                onClick={() => statusMutation.mutate(member.status === 'ACTIVE' ? 'DEACTIVATED' : 'ACTIVE')}
+                onClick={() => member.status === 'ACTIVE' ? setConfirmDeactivate(true) : statusMutation.mutate('ACTIVE')}
                 disabled={statusMutation.isPending}
                 className="text-xs font-medium text-slate-500 dark:text-stone-400 hover:text-slate-700 dark:hover:text-stone-200 disabled:opacity-40 ml-auto"
               >
@@ -331,6 +371,26 @@ function MemberRow({ member, onChanged }: { member: AdminMember; onChanged: () =
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDeactivate}
+        title="Deactivate this NIK?"
+        description={`${member.node.displayName} will lose access to the family tree until reactivated.`}
+        confirmLabel="Deactivate"
+        isLoading={statusMutation.isPending}
+        onConfirm={() => statusMutation.mutate('DEACTIVATED')}
+        onCancel={() => setConfirmDeactivate(false)}
+      />
+
+      <ConfirmDialog
+        open={pendingUnlink !== null}
+        title="Unlink this account?"
+        description={`${pendingUnlink?.email} will no longer be able to sign in as ${member.node.displayName}.`}
+        confirmLabel="Unlink"
+        isLoading={unlinkMutation.isPending}
+        onConfirm={() => { if (pendingUnlink) unlinkMutation.mutate(pendingUnlink.accountId) }}
+        onCancel={() => setPendingUnlink(null)}
+      />
     </li>
   )
 }

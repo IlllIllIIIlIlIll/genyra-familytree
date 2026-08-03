@@ -255,4 +255,30 @@ export declare const FamilySummarySchema: z.ZodObject<{
     name: string;
 }>;
 export type FamilySummary = z.infer<typeof FamilySummarySchema>;
+export declare const AuditLogEntrySchema: z.ZodObject<{
+    id: z.ZodString;
+    familyGroupId: z.ZodString;
+    actorAccountId: z.ZodString;
+    action: z.ZodString;
+    targetId: z.ZodNullable<z.ZodString>;
+    details: z.ZodNullable<z.ZodString>;
+    createdAt: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    id: string;
+    createdAt: string;
+    familyGroupId: string;
+    targetId: string | null;
+    actorAccountId: string;
+    action: string;
+    details: string | null;
+}, {
+    id: string;
+    createdAt: string;
+    familyGroupId: string;
+    targetId: string | null;
+    actorAccountId: string;
+    action: string;
+    details: string | null;
+}>;
+export type AuditLogEntry = z.infer<typeof AuditLogEntrySchema>;
 //# sourceMappingURL=api-response.types.d.ts.map

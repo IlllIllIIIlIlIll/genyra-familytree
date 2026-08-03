@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.FamilySummarySchema = exports.LeaveRequestSchema = exports.NotificationSchema = exports.AuthTokensSchema = exports.MapDataSchema = exports.CreateAdminFamilyGroupSchema = exports.FamilyGroupSchema = void 0;
+exports.AuditLogEntrySchema = exports.FamilySummarySchema = exports.LeaveRequestSchema = exports.NotificationSchema = exports.AuthTokensSchema = exports.MapDataSchema = exports.CreateAdminFamilyGroupSchema = exports.FamilyGroupSchema = void 0;
 const zod_1 = require("zod");
 const person_node_types_1 = require("./person-node.types");
 const relationship_types_1 = require("./relationship.types");
@@ -44,5 +44,14 @@ exports.LeaveRequestSchema = zod_1.z.object({
 exports.FamilySummarySchema = zod_1.z.object({
     id: zod_1.z.string(),
     name: zod_1.z.string(),
+});
+exports.AuditLogEntrySchema = zod_1.z.object({
+    id: zod_1.z.string(),
+    familyGroupId: zod_1.z.string(),
+    actorAccountId: zod_1.z.string(),
+    action: zod_1.z.string(),
+    targetId: zod_1.z.string().nullable(),
+    details: zod_1.z.string().nullable(),
+    createdAt: zod_1.z.string().datetime(),
 });
 //# sourceMappingURL=api-response.types.js.map

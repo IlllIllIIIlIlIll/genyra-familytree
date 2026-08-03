@@ -32,6 +32,16 @@ export interface ExchangeResult {
   personas:     NikPersona[]
 }
 
+/** Parses simple "7d" / "15m" / "30s" / "1h" duration strings (the only
+ * formats used by JWT_ACCESS_EXPIRES_IN / JWT_REFRESH_EXPIRES_IN) into ms. */
+function parseDurationMs(input: string): number {
+  const match = /^(\d+)(s|m|h|d)$/.exec(input.trim())
+  if (!match) throw new Error(`Unsupported duration format: "${input}"`)
+  const value = Number(match[1])
+  const unitMs = { s: 1_000, m: 60_000, h: 3_600_000, d: 86_400_000 }[match[2] as 's' | 'm' | 'h' | 'd']
+  return value * unitMs
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -144,7 +154,14 @@ export class AuthService {
 
     if (identity.activeAccountId && identity.activeAccountId !== accountId) {
       const holder = await this.prisma.account.findUnique({ where: { id: identity.activeAccountId } })
-      if (holder?.refreshToken) {
+      // A holder only actually blocks this select while their refresh token is
+      // still live — checking mere presence of a token hash is wrong, since it
+      // stays set forever unless the holder explicitly logs out (most users
+      // just close the tab), which would otherwise lock the NIK permanently.
+      const holderStillActive = !!holder?.refreshToken
+        && !!holder.refreshTokenExpiresAt
+        && holder.refreshTokenExpiresAt > new Date()
+      if (holderStillActive) {
         throw new ForbiddenException('This profile is currently active on another Google account')
       }
     }
@@ -180,7 +197,7 @@ export class AuthService {
     }
     await this.prisma.account.update({
       where: { id: payload.sub },
-      data:  { refreshToken: null, activeNik: null },
+      data:  { refreshToken: null, refreshTokenExpiresAt: null, activeNik: null },
     })
   }
 
@@ -239,9 +256,14 @@ export class AuthService {
     ])
 
     const hashedRefresh = await argon2.hash(refreshToken)
+    const refreshTtlMs = parseDurationMs(process.env['JWT_REFRESH_EXPIRES_IN'] ?? '7d')
     await this.prisma.account.update({
       where: { id: accountId },
-      data:  { refreshToken: hashedRefresh, activeNik: scope.isAdmin ? null : scope.nik },
+      data:  {
+        refreshToken: hashedRefresh,
+        refreshTokenExpiresAt: new Date(Date.now() + refreshTtlMs),
+        activeNik: scope.isAdmin ? null : scope.nik,
+      },
     })
 
     return { accessToken, refreshToken }

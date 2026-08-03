@@ -47,7 +47,9 @@
       "Bash(curl -s -o /dev/null -w \"port3001: %{http_code}\\\\n\" http://localhost:3001/login)",
       "Bash(taskkill //F //PID 20796 //T)",
       "Bash(taskkill //F //PID 19544 //T)",
-      "Bash(curl -s -o /dev/null -w \"\\\\napi: %{http_code}\\\\n\" http://localhost:3001/api)"
+      "Bash(curl -s -o /dev/null -w \"\\\\napi: %{http_code}\\\\n\" http://localhost:3001/api)",
+      "Bash(tasklist *)",
+      "Bash(npx jest *)"
     ]
   }
 }

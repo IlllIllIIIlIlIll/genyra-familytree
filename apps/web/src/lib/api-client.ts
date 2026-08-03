@@ -21,6 +21,7 @@ import type {
   LeaveRequest,
   FamilySummary,
   GoogleExchangeResponse,
+  AuditLogEntry,
 } from '@genyra/shared-types'
 
 const API_URL = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'
@@ -210,17 +211,6 @@ export const apiClient = {
     return data
   },
 
-  // ── Share token ──────────────────────────────────────────────────────────────
-  createShareToken: async (): Promise<{ token: string; expiresAt: string }> => {
-    const { data } = await http.post<{ token: string; expiresAt: string }>('/share/token')
-    return data
-  },
-
-  getPublicMapData: async (token: string): Promise<{ familyName: string; nodes: PersonNode[]; edges: RelationshipEdge[] }> => {
-    const { data } = await http.get<{ familyName: string; nodes: PersonNode[]; edges: RelationshipEdge[] }>(`/share/${token}`)
-    return data
-  },
-
   // ── Admin (isAdmin-only) ─────────────────────────────────────────────────────
   admin: {
     getFamily: async (): Promise<FamilyGroup> => {
@@ -299,6 +289,24 @@ export const apiClient = {
     processLeaveRequest: async (requestId: string, approve: boolean): Promise<{ message: string }> => {
       const { data } = await http.patch<{ message: string }>(`/admin/leave-requests/${requestId}`, { approve })
       return data
+    },
+
+    getAuditLog: async (): Promise<AuditLogEntry[]> => {
+      const { data } = await http.get<AuditLogEntry[]>('/admin/audit-log')
+      return data
+    },
+
+    /** Downloads the family member list as an .xlsx file and triggers a browser save. */
+    downloadMembersExcel: async (): Promise<void> => {
+      const { data } = await http.get<Blob>('/admin/export', { responseType: 'blob' })
+      const url = window.URL.createObjectURL(data)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'family-members.xlsx'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
     },
   },
 }

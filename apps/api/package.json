@@ -18,6 +18,7 @@
     "db:seed:test": "ts-node --transpile-only prisma/seed-test.ts"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.0.2",
     "@fastify/multipart": "^9.4.0",
     "@fastify/static": "^9.0.0",
     "@genyra/shared-types": "workspace:*",
@@ -32,6 +33,7 @@
     "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^6.1.0",
     "argon2": "^0.41.1",
+    "exceljs": "^4.4.0",
     "fastify": "^5.8.2",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",

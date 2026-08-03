@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, HttpCode, HttpStatus } from '@nestjs/common'
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, HttpCode, HttpStatus, Res } from '@nestjs/common'
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger'
+import type { FastifyReply } from 'fastify'
 import { AdminService, type AdminMember } from './admin.service'
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard'
 import { AdminGuard } from '../common/guards/admin.guard'
@@ -16,6 +17,7 @@ import type {
   FamilyGroup,
   PersonNode,
   RelationshipEdge,
+  AuditLogEntry,
   CreateAdminFamilyGroupDto,
   CreateNikIdentityDto,
   LinkAccountDto,
@@ -158,5 +160,21 @@ export class AdminController {
     @CurrentUser() user: JwtPayload,
   ): Promise<{ message: string }> {
     return this.adminService.processLeaveRequest(user.sub, requestId, body.approve)
+  }
+
+  @Get('audit-log')
+  @ApiOperation({ summary: 'List recent admin actions for this family' })
+  async getAuditLog(@CurrentUser() user: JwtPayload): Promise<AuditLogEntry[]> {
+    return this.adminService.getAuditLog(user.sub)
+  }
+
+  @Get('export')
+  @ApiOperation({ summary: 'Download the family member list as an Excel file' })
+  async exportMembersExcel(@CurrentUser() user: JwtPayload, @Res() reply: FastifyReply): Promise<void> {
+    const buffer = await this.adminService.exportMembersExcel(user.sub)
+    reply
+      .header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      .header('Content-Disposition', 'attachment; filename="family-members.xlsx"')
+      .send(buffer)
   }
 }

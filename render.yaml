@@ -4,7 +4,7 @@ services:
     runtime: node
     buildCommand: npm install -g pnpm@10 && pnpm install --frozen-lockfile && pnpm --filter @genyra/api prisma:generate && pnpm --filter @genyra/api prisma:migrate:deploy && pnpm --filter @genyra/api build
     startCommand: node apps/api/dist/main.js
-    healthCheckPath: /api
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production

@@ -5,12 +5,15 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common'
+import * as ExcelJS from 'exceljs'
 import { PrismaService } from '../prisma/prisma.service'
 import { NotificationsService } from '../notifications/notifications.service'
+import { AuditService } from '../audit/audit.service'
 import type {
   FamilyGroup,
   PersonNode,
   RelationshipEdge,
+  AuditLogEntry,
   CreateAdminFamilyGroupDto,
   CreateNikIdentityDto,
   CreatePersonNodeDto,
@@ -20,6 +23,8 @@ import type {
 
 const MAX_NIK_LINKS_PER_ACCOUNT = 5
 const MAX_ACCOUNTS_PER_NIK      = 2
+const MAX_NIK_FAMILIES          = 3
+const MAX_FAMILY_SIZE           = 500
 
 export interface AdminMember {
   node:           PersonNode
@@ -39,6 +44,7 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly audit: AuditService,
   ) {}
 
   // ── Family ──────────────────────────────────────────────────────────────
@@ -56,6 +62,7 @@ export class AdminService {
     const group = await this.prisma.familyGroup.create({
       data: { name: dto.name, description: dto.description ?? null, adminAccountId: accountId },
     })
+    await this.audit.log({ familyGroupId: group.id, actorAccountId: accountId, action: 'FAMILY_CREATED', details: dto.name })
     return this.toFamilyGroupDto(group)
   }
 
@@ -64,11 +71,13 @@ export class AdminService {
     const trimmed = name.trim()
     if (!trimmed) throw new BadRequestException('Family name cannot be empty')
     const updated = await this.prisma.familyGroup.update({ where: { id: group.id }, data: { name: trimmed } })
+    await this.audit.log({ familyGroupId: group.id, actorAccountId: accountId, action: 'FAMILY_RENAMED', details: trimmed })
     return this.toFamilyGroupDto(updated)
   }
 
   async deleteFamily(accountId: string): Promise<{ message: string }> {
     const group = await this.requireFamily(accountId)
+    await this.audit.log({ familyGroupId: group.id, actorAccountId: accountId, action: 'FAMILY_DELETED' })
     await this.prisma.$transaction(async (tx) => {
       await tx.relationshipEdge.deleteMany({ where: { source: { familyGroupId: group.id } } })
       await tx.personNode.deleteMany({ where: { familyGroupId: group.id } })
@@ -102,6 +111,7 @@ export class AdminService {
 
   async createNikIdentity(accountId: string, dto: CreateNikIdentityDto): Promise<PersonNode> {
     const group = await this.requireFamily(accountId)
+    await this.assertFamilyNotFull(group.id)
 
     const existing = await this.prisma.nikIdentity.findUnique({ where: { nik: dto.nik } })
     if (existing) {
@@ -111,7 +121,9 @@ export class AdminService {
       if (alreadyInFamily) throw new ConflictException('This NIK is already a member of your family')
 
       const familyCount = await this.prisma.personNode.count({ where: { nikId: dto.nik } })
-      if (familyCount >= 3) throw new BadRequestException('This NIK already belongs to the maximum of 3 families')
+      if (familyCount >= MAX_NIK_FAMILIES) {
+        throw new BadRequestException(`This NIK already belongs to the maximum of ${MAX_NIK_FAMILIES} families`)
+      }
     } else {
       await this.prisma.nikIdentity.create({ data: { nik: dto.nik, status: 'ACTIVE' } })
     }
@@ -130,52 +142,72 @@ export class AdminService {
       },
       include: { identity: true },
     })
+    await this.audit.log({
+      familyGroupId: group.id, actorAccountId: accountId, action: 'NIK_IDENTITY_CREATED',
+      targetId: dto.nik, details: dto.displayName,
+    })
     return this.toPersonNodeDto(node)
   }
 
   async setNikStatus(accountId: string, nik: string, status: 'ACTIVE' | 'DEACTIVATED'): Promise<void> {
-    await this.requireFamily(accountId)
+    const group = await this.requireFamily(accountId)
     const identity = await this.prisma.nikIdentity.findUnique({ where: { nik } })
     if (!identity) throw new NotFoundException('NIK not found')
     await this.prisma.nikIdentity.update({ where: { nik }, data: { status } })
+    await this.audit.log({
+      familyGroupId: group.id, actorAccountId: accountId,
+      action: status === 'ACTIVE' ? 'NIK_ACTIVATED' : 'NIK_DEACTIVATED', targetId: nik,
+    })
   }
 
   async linkAccount(accountId: string, nik: string, email: string): Promise<void> {
-    await this.requireFamily(accountId)
+    const group = await this.requireFamily(accountId)
 
     const identity = await this.prisma.nikIdentity.findUnique({ where: { nik } })
     if (!identity) throw new NotFoundException('NIK not found')
 
-    const nikLinkCount = await this.prisma.nikLink.count({ where: { nik } })
-    if (nikLinkCount >= MAX_ACCOUNTS_PER_NIK) {
-      throw new BadRequestException(`A NIK can be linked to at most ${MAX_ACCOUNTS_PER_NIK} Google accounts`)
-    }
-
-    let account = await this.prisma.account.findUnique({ where: { email } })
-    if (account?.isAdmin) throw new BadRequestException('Admin accounts cannot hold NIK access')
-
-    if (account) {
-      const accountLinkCount = await this.prisma.nikLink.count({ where: { accountId: account.id } })
-      if (accountLinkCount >= MAX_NIK_LINKS_PER_ACCOUNT) {
-        throw new BadRequestException(`A Google account can hold at most ${MAX_NIK_LINKS_PER_ACCOUNT} NIKs`)
+    // The count-checks and the create must be atomic — otherwise two
+    // concurrent link requests can both pass the count check before either
+    // commits, exceeding MAX_ACCOUNTS_PER_NIK / MAX_NIK_LINKS_PER_ACCOUNT.
+    await this.prisma.$transaction(async (tx) => {
+      const nikLinkCount = await tx.nikLink.count({ where: { nik } })
+      if (nikLinkCount >= MAX_ACCOUNTS_PER_NIK) {
+        throw new BadRequestException(`A NIK can be linked to at most ${MAX_ACCOUNTS_PER_NIK} Google accounts`)
       }
-      const existingLink = await this.prisma.nikLink.findUnique({
-        where: { accountId_nik: { accountId: account.id, nik } },
-      })
-      if (existingLink) throw new ConflictException('This account is already linked to that NIK')
-    } else {
-      account = await this.prisma.account.create({ data: { email } })
-    }
 
-    await this.prisma.nikLink.create({ data: { accountId: account.id, nik } })
+      let account = await tx.account.findUnique({ where: { email } })
+      if (account?.isAdmin) throw new BadRequestException('Admin accounts cannot hold NIK access')
+
+      if (account) {
+        const accountLinkCount = await tx.nikLink.count({ where: { accountId: account.id } })
+        if (accountLinkCount >= MAX_NIK_LINKS_PER_ACCOUNT) {
+          throw new BadRequestException(`A Google account can hold at most ${MAX_NIK_LINKS_PER_ACCOUNT} NIKs`)
+        }
+        const existingLink = await tx.nikLink.findUnique({
+          where: { accountId_nik: { accountId: account.id, nik } },
+        })
+        if (existingLink) throw new ConflictException('This account is already linked to that NIK')
+      } else {
+        account = await tx.account.create({ data: { email } })
+      }
+
+      await tx.nikLink.create({ data: { accountId: account.id, nik } })
+    })
+
+    await this.audit.log({
+      familyGroupId: group.id, actorAccountId: accountId, action: 'ACCOUNT_LINKED', targetId: nik, details: email,
+    })
   }
 
   async unlinkAccount(accountId: string, nik: string, targetAccountId: string): Promise<void> {
-    await this.requireFamily(accountId)
+    const group = await this.requireFamily(accountId)
     await this.prisma.nikLink.deleteMany({ where: { nik, accountId: targetAccountId } })
     await this.prisma.nikIdentity.updateMany({
       where: { nik, activeAccountId: targetAccountId },
       data:  { activeAccountId: null },
+    })
+    await this.audit.log({
+      familyGroupId: group.id, actorAccountId: accountId, action: 'ACCOUNT_UNLINKED', targetId: nik, details: targetAccountId,
     })
   }
 
@@ -183,6 +215,7 @@ export class AdminService {
 
   async createPersonNode(accountId: string, dto: CreatePersonNodeDto): Promise<PersonNode> {
     const group = await this.requireFamily(accountId)
+    await this.assertFamilyNotFull(group.id)
     const node = await this.prisma.personNode.create({
       data: {
         displayName:   dto.displayName,
@@ -201,6 +234,10 @@ export class AdminService {
         familyGroupId: group.id,
       },
       include: { identity: true },
+    })
+    await this.audit.log({
+      familyGroupId: group.id, actorAccountId: accountId, action: 'PERSON_NODE_CREATED',
+      targetId: node.id, details: dto.displayName,
     })
     return this.toPersonNodeDto(node)
   }
@@ -239,6 +276,9 @@ export class AdminService {
       await this.notifications.pruneForFamily(group.id)
     }
 
+    await this.audit.log({
+      familyGroupId: group.id, actorAccountId: accountId, action: 'PERSON_NODE_UPDATED', targetId: id,
+    })
     return this.toPersonNodeDto(updated)
   }
 
@@ -247,6 +287,10 @@ export class AdminService {
     const node = await this.prisma.personNode.findUnique({ where: { id } })
     if (!node || node.familyGroupId !== group.id) throw new NotFoundException('Person node not found')
     await this.prisma.personNode.delete({ where: { id } })
+    await this.audit.log({
+      familyGroupId: group.id, actorAccountId: accountId, action: 'PERSON_NODE_DELETED',
+      targetId: id, details: node.displayName,
+    })
   }
 
   // ── Relationships ───────────────────────────────────────────────────────
@@ -283,6 +327,10 @@ export class AdminService {
         notes:        dto.notes ?? null,
       },
     })
+    await this.audit.log({
+      familyGroupId: group.id, actorAccountId: accountId, action: 'RELATIONSHIP_CREATED',
+      targetId: edge.id, details: `${dto.relationshipType}: ${dto.sourceId} -> ${dto.targetId}`,
+    })
     return this.toRelationshipDto(edge)
   }
 
@@ -294,6 +342,9 @@ export class AdminService {
     })
     if (!edge || edge.source.familyGroupId !== group.id) throw new NotFoundException('Relationship not found')
     await this.prisma.relationshipEdge.delete({ where: { id } })
+    await this.audit.log({
+      familyGroupId: group.id, actorAccountId: accountId, action: 'RELATIONSHIP_DELETED', targetId: id,
+    })
   }
 
   // ── Leave requests ─────────────────────────────────────────────────────
@@ -326,10 +377,74 @@ export class AdminService {
         const node = await tx.personNode.findFirst({ where: { nikId: leaveRequest.nikId, familyGroupId: group.id } })
         if (node) await tx.personNode.delete({ where: { id: node.id } })
       })
+      await this.audit.log({
+        familyGroupId: group.id, actorAccountId: accountId, action: 'LEAVE_REQUEST_APPROVED',
+        targetId: requestId, details: leaveRequest.nikId,
+      })
       return { message: 'Member has been removed from the family.' }
     }
     await this.prisma.leaveRequest.update({ where: { id: requestId }, data: { status: 'REJECTED' } })
+    await this.audit.log({
+      familyGroupId: group.id, actorAccountId: accountId, action: 'LEAVE_REQUEST_REJECTED', targetId: requestId,
+    })
     return { message: 'Leave request rejected.' }
+  }
+
+  // ── Audit log ───────────────────────────────────────────────────────────
+
+  async getAuditLog(accountId: string): Promise<AuditLogEntry[]> {
+    const group = await this.requireFamily(accountId)
+    const entries = await this.audit.getForFamily(group.id)
+    return entries.map((e) => ({
+      id:             e.id,
+      familyGroupId:  e.familyGroupId,
+      actorAccountId: e.actorAccountId,
+      action:         e.action,
+      targetId:       e.targetId,
+      details:        e.details,
+      createdAt:      e.createdAt.toISOString(),
+    }))
+  }
+
+  // ── Excel export ────────────────────────────────────────────────────────
+
+  async exportMembersExcel(accountId: string): Promise<Buffer> {
+    const members = await this.listMembers(accountId)
+
+    const workbook = new ExcelJS.Workbook()
+    workbook.creator = 'Genyra'
+    workbook.created = new Date()
+
+    const sheet = workbook.addWorksheet('Family Members')
+    sheet.columns = [
+      { header: 'Display Name', key: 'displayName', width: 28 },
+      { header: 'Nickname',     key: 'surname',     width: 16 },
+      { header: 'NIK',          key: 'nik',          width: 20 },
+      { header: 'Gender',       key: 'gender',       width: 10 },
+      { header: 'Birth Date',   key: 'birthDate',    width: 14 },
+      { header: 'Birth Place',  key: 'birthPlace',   width: 18 },
+      { header: 'Deceased',     key: 'isDeceased',   width: 10 },
+      { header: 'Status',       key: 'status',       width: 14 },
+      { header: 'Linked Emails', key: 'linkedEmails', width: 40 },
+    ]
+    sheet.getRow(1).font = { bold: true }
+
+    for (const m of members) {
+      sheet.addRow({
+        displayName:  m.node.displayName,
+        surname:      m.node.surname ?? '',
+        nik:          m.nik ?? '',
+        gender:       m.node.gender ?? '',
+        birthDate:    m.node.birthDate?.slice(0, 10) ?? '',
+        birthPlace:   m.node.birthPlace ?? '',
+        isDeceased:   m.node.isDeceased ? 'Yes' : 'No',
+        status:       m.status ?? '',
+        linkedEmails: m.linkedAccounts.map((a) => a.email).join(', '),
+      })
+    }
+
+    const arrayBuffer = await workbook.xlsx.writeBuffer()
+    return Buffer.from(arrayBuffer)
   }
 
   // ── Private helpers ────────────────────────────────────────────────────
@@ -338,6 +453,13 @@ export class AdminService {
     const group = await this.prisma.familyGroup.findUnique({ where: { adminAccountId: accountId } })
     if (!group) throw new NotFoundException('You do not own a family yet')
     return group
+  }
+
+  private async assertFamilyNotFull(familyGroupId: string): Promise<void> {
+    const count = await this.prisma.personNode.count({ where: { familyGroupId } })
+    if (count >= MAX_FAMILY_SIZE) {
+      throw new BadRequestException(`A family can have at most ${MAX_FAMILY_SIZE} members`)
+    }
   }
 
   private async assertNoLivingSpouse(nodeId: string): Promise<void> {

@@ -12,8 +12,8 @@ import { AdminModule } from './admin/admin.module'
 import { PersonPhotosModule } from './person-photos/person-photos.module'
 import { NotificationsModule } from './notifications/notifications.module'
 import { AuditModule } from './audit/audit.module'
-import { ShareModule } from './share/share.module'
 import { TasksModule } from './tasks/tasks.module'
+import { HealthModule } from './health/health.module'
 
 @Module({
   imports: [
@@ -33,8 +33,8 @@ import { TasksModule } from './tasks/tasks.module'
     PersonPhotosModule,
     NotificationsModule,
     AuditModule,
-    ShareModule,
     TasksModule,
+    HealthModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

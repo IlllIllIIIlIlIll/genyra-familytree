@@ -8,18 +8,19 @@ datasource db {
 }
 
 model Account {
-  id           String       @id @default(cuid())
-  googleId     String?      @unique
-  email        String       @unique
-  name         String?
-  avatarUrl    String?
-  isAdmin      Boolean      @default(false)
-  refreshToken String?
-  activeNik    String?
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-  nikLinks     NikLink[]
-  ownedFamily  FamilyGroup? @relation("FamilyAdmin")
+  id                   String       @id @default(cuid())
+  googleId             String?      @unique
+  email                String       @unique
+  name                 String?
+  avatarUrl            String?
+  isAdmin              Boolean      @default(false)
+  refreshToken         String?
+  refreshTokenExpiresAt DateTime?
+  activeNik            String?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  nikLinks             NikLink[]
+  ownedFamily          FamilyGroup? @relation("FamilyAdmin")
 }
 
 model NikIdentity {
@@ -153,17 +154,6 @@ model AuditLog {
   createdAt       DateTime @default(now())
 
   @@index([familyGroupId, createdAt])
-}
-
-model ShareToken {
-  id                 String   @id @default(cuid())
-  token              String   @unique
-  familyGroupId      String
-  createdByAccountId String
-  expiresAt          DateTime
-  createdAt          DateTime @default(now())
-
-  @@index([token])
 }
 
 enum Gender {
