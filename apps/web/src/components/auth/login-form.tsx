@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 
@@ -20,14 +21,22 @@ export function LoginForm() {
   }
 
   return (
-    <Button
-      type="button"
-      size="lg"
-      className="w-full bg-white dark:bg-stone-900 text-slate-700 dark:text-stone-200 border border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800"
-      onClick={handleGoogleSignIn}
-    >
-      <GoogleIcon />
-      Sign in with Google
-    </Button>
+    <div className="flex flex-col gap-3">
+      <Button
+        type="button"
+        size="lg"
+        className="w-full bg-white dark:bg-stone-900 text-slate-700 dark:text-stone-200 border border-stone-200 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800"
+        onClick={handleGoogleSignIn}
+      >
+        <GoogleIcon />
+        Sign in with Google
+      </Button>
+
+      <Link href="/demo" className="w-full">
+        <Button type="button" variant="ghost" size="lg" className="w-full">
+          Try the demo instead
+        </Button>
+      </Link>
+    </div>
   )
 }

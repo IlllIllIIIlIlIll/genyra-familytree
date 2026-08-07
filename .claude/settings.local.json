@@ -49,7 +49,8 @@
       "Bash(taskkill //F //PID 19544 //T)",
       "Bash(curl -s -o /dev/null -w \"\\\\napi: %{http_code}\\\\n\" http://localhost:3001/api)",
       "Bash(tasklist *)",
-      "Bash(npx jest *)"
+      "Bash(npx jest *)",
+      "Bash(tee \"C:\\\\Users\\\\Lenovo\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Lenovo-Documents-GitHub-genyra-familytree\\\\6911f27b-c72e-45d6-a209-7b952312a9db\\\\scratchpad\\\\dev-web.log\")"
     ]
   }
 }
